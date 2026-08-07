@@ -21,7 +21,6 @@ X = torch.stack(
 
 Y = ((A + B) % p).flatten()
 
-
 class ModularAdder(nn.Module):
     def __init__(self, p, embedding_dim=64):
         super().__init__()
@@ -29,7 +28,7 @@ class ModularAdder(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(2 * embedding_dim, 128),
             nn.ReLU(),
-            nn.Linear(128, p),
+            nn.Linear(128, p)
         )
 
     def forward(self, x):
@@ -37,7 +36,7 @@ class ModularAdder(nn.Module):
         b = self.embedding(x[:, 1])
         return self.mlp(torch.cat([a, b], dim=1))
 
-model = ModularAdder(p).to(device)
+raw_model = ModularAdder(p).to(device)
 
 n_samples = X.shape[0]
 n_train = int(n_samples * 0.5)
@@ -53,10 +52,11 @@ Y_train = Y[train_idx]
 X_test = X[test_idx]
 Y_test = Y[test_idx]
 
+model = torch.compile(raw_model)
 optimizer = optim.AdamW(model.parameters(), lr=1e-3, weight_decay=1e-1)
 loss_fn = nn.CrossEntropyLoss()
 
-n_epochs = 30_000
+n_epochs = 25_000
 
 train_acc = []
 test_acc = []
@@ -88,4 +88,15 @@ plt.plot(np.log(range(1, n_epochs)), test_acc, label="Test Accuracy (%)", linest
 plt.title("Modular Addition")
 plt.legend(loc='upper left')
 plt.savefig("modular_grokking.svg",dpi=200,bbox_inches="tight")
+plt.show()
+
+W = raw_model.mlp[-1].weight.detach().cpu()   # [p, hidden_dim]
+F = torch.fft.fft(W, dim=0)
+power = (F.abs() ** 2).mean(dim=1)
+freqs = torch.arange(p)
+
+plt.plot(freqs[:p//2], power[:p//2])
+plt.xlabel("Fourier frequency k")
+plt.ylabel("Mean power")
+plt.title("Fourier spectrum of output weights")
 plt.show()
