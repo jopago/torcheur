@@ -183,9 +183,12 @@ def tensor_premises(
 # =========================
 
 
-def make_atom_ax(name: str) -> Ax:
+def make_atom_ax(name: str, rng: random.Random, ax_pos_prob: float) -> Ax:
     atom = Atom(name)
-    return Ax((atom, dual(atom)))
+    atom_dual = dual(atom)
+    if rng.random() < ax_pos_prob:
+        return Ax((atom, atom_dual))
+    return Ax((atom_dual, atom))
 
 
 def make_unit_ax() -> Ax:
@@ -217,6 +220,36 @@ def make_par(child: Proof, rng: random.Random) -> ParRule:
     return ParRule(sequent, index, child)
 
 
+def interleave(
+    left_formulas: tuple[Formula, ...] | list[Formula],
+    right_formulas: tuple[Formula, ...] | list[Formula],
+    rng: random.Random,
+) -> tuple[list[Formula], list[str]]:
+    merged: list[Formula] = []
+    origins: list[str] = []
+    left_index = 0
+    right_index = 0
+
+    while left_index < len(left_formulas) or right_index < len(right_formulas):
+        if left_index >= len(left_formulas):
+            take_left = False
+        elif right_index >= len(right_formulas):
+            take_left = True
+        else:
+            take_left = bool(rng.getrandbits(1))
+
+        if take_left:
+            merged.append(left_formulas[left_index])
+            origins.append("L")
+            left_index += 1
+        else:
+            merged.append(right_formulas[right_index])
+            origins.append("R")
+            right_index += 1
+
+    return merged, origins
+
+
 def make_tensor(left: Proof, right: Proof, rng: random.Random) -> TensorRule:
     if not left.sequent or not right.sequent:
         raise ValueError("tensor requires two non-empty premises")
@@ -232,11 +265,15 @@ def make_tensor(left: Proof, right: Proof, rng: random.Random) -> TensorRule:
     delta1 = right.sequent[:right_factor_index]
     delta2 = right.sequent[right_factor_index + 1 :]
 
-    sequent = gamma1 + delta1 + (Tensor(left_factor, right_factor),) + gamma2 + delta2
-    principal_index = len(gamma1) + len(delta1)
+    before, before_origins = interleave(gamma1, delta1, rng)
+    after, after_origins = interleave(gamma2, delta2, rng)
 
-    left_positions = tuple(range(len(gamma1))) + tuple(
-        range(principal_index + 1, principal_index + 1 + len(gamma2))
+    sequent = tuple(before + [Tensor(left_factor, right_factor)] + after)
+    principal_index = len(before)
+    origins = before_origins + ["T"] + after_origins
+
+    left_positions = tuple(
+        position for position, origin in enumerate(origins) if origin == "L"
     )
 
     return TensorRule(
@@ -257,26 +294,46 @@ def par_candidates(forest: list[Proof]) -> list[int]:
     return [i for i, proof in enumerate(forest) if len(proof.sequent) >= 2]
 
 
+def weighted_choice(rng: random.Random, weights: dict[str, float]) -> str:
+    items = [(name, weight) for name, weight in weights.items() if weight > 0]
+    if not items:
+        raise ValueError("no positive weights")
+    total = sum(weight for _, weight in items)
+    roll = rng.random() * total
+    cumulative = 0.0
+    for name, weight in items:
+        cumulative += weight
+        if roll < cumulative:
+            return name
+    return items[-1][0]
+
+
 def generate_proof(
     rng: random.Random,
     n_leaves: int,
     n_atoms: int,
     one_prob: float,
     ax_prob: float,
+    ax_pos_prob: float,
     tensor_prob: float,
     par_prob: float,
+    stop_prob: float,
     single_formula: bool,
 ) -> Proof:
     if n_atoms < 1:
         raise ValueError("n_atoms must be >= 1")
     if one_prob < 0 or ax_prob < 0 or one_prob + ax_prob > 1:
         raise ValueError("need one_prob >= 0, ax_prob >= 0, one_prob + ax_prob <= 1")
+    if not (0 <= ax_pos_prob <= 1):
+        raise ValueError("ax_pos_prob must be in [0, 1]")
     if tensor_prob < 0 or par_prob < 0 or tensor_prob + par_prob > 1:
         raise ValueError(
             "need tensor_prob >= 0, par_prob >= 0, tensor_prob + par_prob <= 1"
         )
+    if not (0 <= stop_prob <= 1):
+        raise ValueError("stop_prob must be in [0, 1]")
 
-    # Residual mass is bot: bot_prob = 1 - tensor_prob - par_prob.
+    bot_prob = 1.0 - tensor_prob - par_prob
     forest: list[Proof] = []
 
     for _ in range(n_leaves):
@@ -284,51 +341,58 @@ def generate_proof(
         if roll < one_prob:
             forest.append(make_one())
         elif roll < one_prob + ax_prob:
-            forest.append(make_atom_ax(atom_name(rng.randrange(n_atoms))))
+            forest.append(
+                make_atom_ax(atom_name(rng.randrange(n_atoms)), rng, ax_pos_prob)
+            )
         else:
             forest.append(make_unit_ax())
 
     while True:
         can_par = bool(par_candidates(forest))
-        # single_formula + sequent longer than 1 ⇒ that sequent has ≥2 formulas ⇒ can_par
-        must_continue = (
-            single_formula and len(forest) == 1 and len(forest[0].sequent) > 1
-        )
-
-        roll = rng.random()
 
         if len(forest) > 1:
-            if roll < tensor_prob:
+            if can_par:
+                action = weighted_choice(
+                    rng,
+                    {"tensor": tensor_prob, "par": par_prob, "bot": bot_prob},
+                )
+            else:
+                # Unavailable ⅋ mass is transferred to ⊗, not to ⊥.
+                action = weighted_choice(
+                    rng,
+                    {"tensor": tensor_prob + par_prob, "bot": bot_prob},
+                )
+
+            if action == "tensor":
                 left_index = rng.randrange(len(forest))
                 left = forest.pop(left_index)
                 right_index = rng.randrange(len(forest))
                 right = forest.pop(right_index)
                 forest.append(make_tensor(left, right, rng))
-                continue
-
-            if roll < tensor_prob + par_prob and can_par:
+            elif action == "par":
                 index = rng.choice(par_candidates(forest))
                 forest[index] = make_par(forest[index], rng)
-                continue
-
-            # bot residual, or par mass when par is unavailable
-            index = rng.randrange(len(forest))
-            forest[index] = make_bot(forest[index], rng)
+            else:
+                index = rng.randrange(len(forest))
+                forest[index] = make_bot(forest[index], rng)
             continue
 
-        # Forest size 1: tensor_prob becomes stop probability.
-        if must_continue:
-            forest[0] = make_par(forest[0], rng)
-            continue
+        # Forest size 1: ⊗ is impossible; stop_prob controls termination.
+        if rng.random() < stop_prob:
+            proof = forest[0]
+            if single_formula:
+                while len(proof.sequent) > 1:
+                    proof = make_par(proof, rng)
+            return proof
 
-        if roll < tensor_prob:
-            return forest[0]
-
-        if roll < tensor_prob + par_prob and can_par:
-            forest[0] = make_par(forest[0], rng)
-            continue
-
-        forest[0] = make_bot(forest[0], rng)
+        if can_par and (par_prob > 0 or bot_prob > 0):
+            action = weighted_choice(rng, {"par": par_prob, "bot": bot_prob})
+            if action == "par":
+                forest[0] = make_par(forest[0], rng)
+            else:
+                forest[0] = make_bot(forest[0], rng)
+        else:
+            forest[0] = make_bot(forest[0], rng)
 
 
 # =========================
@@ -443,8 +507,10 @@ def generate_dataset(
     n_atoms: int,
     one_prob: float,
     ax_prob: float,
+    ax_pos_prob: float,
     tensor_prob: float,
     par_prob: float,
+    stop_prob: float,
     single_formula: bool,
 ) -> None:
 
@@ -458,8 +524,10 @@ def generate_dataset(
                 n_atoms=n_atoms,
                 one_prob=one_prob,
                 ax_prob=ax_prob,
+                ax_pos_prob=ax_pos_prob,
                 tensor_prob=tensor_prob,
                 par_prob=par_prob,
+                stop_prob=stop_prob,
                 single_formula=single_formula,
             )
 
@@ -472,12 +540,12 @@ def generate_dataset(
 def main() -> None:
     ap = argparse.ArgumentParser()
 
-    ap.add_argument("--n", type=int, default=1000)
+    ap.add_argument("--n", type=int, default=500000)
     ap.add_argument("--out", type=Path, default=Path("mll_positional.txt"))
     ap.add_argument("--seed", type=int, default=0)
 
     ap.add_argument("--min-leaves", type=int, default=2)
-    ap.add_argument("--max-leaves", type=int, default=16)
+    ap.add_argument("--max-leaves", type=int, default=20)
     ap.add_argument(
         "--n-atoms",
         type=int,
@@ -488,26 +556,49 @@ def main() -> None:
     ap.add_argument(
         "--one-prob",
         type=float,
-        default=0.20,
-        help="probability of a 𝟙 leaf",
+        default=0.15,
+        help="probability of a 𝟙 leaf; residual after one_prob+ax_prob is ⊢ 𝟙, ⊥",
     )
     ap.add_argument(
         "--ax-prob",
         type=float,
-        default=0.60,
-        help="probability of an atomic axiom leaf; residual is ⊢ 𝟙, ⊥",
+        default=0.80,
+        help="probability of an atomic axiom leaf; residual after one_prob+ax_prob is ⊢ 𝟙, ⊥",
+    )
+    ap.add_argument(
+        "--ax-pos-prob",
+        type=float,
+        default=0.50,
+        help="given an atomic axiom, probability of ⊢ A, A⊥ (else ⊢ A⊥, A)",
     )
     ap.add_argument(
         "--tensor-prob",
         type=float,
         default=0.45,
-        help="probability of ⊗ (or stop when the forest has size 1)",
+        help=(
+            "probability of ⊗ when the forest has size > 1; "
+            "residual of tensor_prob+par_prob is bot_prob for ⊥; "
+            "if ⅋ is unavailable, par_prob mass is transferred to ⊗"
+        ),
     )
     ap.add_argument(
         "--par-prob",
         type=float,
-        default=0.35,
-        help="probability of ⅋; residual is ⊥",
+        default=0.45,
+        help=(
+            "probability of ⅋ when available; "
+            "residual of tensor_prob+par_prob is bot_prob for ⊥; "
+            "if ⅋ is unavailable with several trees, this mass goes to ⊗"
+        ),
+    )
+    ap.add_argument(
+        "--stop-prob",
+        type=float,
+        default=0.85,
+        help=(
+            "when the forest has a single tree and stopping is allowed, "
+            "probability of returning immediately; otherwise continue with ⅋/⊥"
+        ),
     )
 
     ap.add_argument("--single-formula", action="store_true")
@@ -523,8 +614,10 @@ def main() -> None:
         n_atoms=args.n_atoms,
         one_prob=args.one_prob,
         ax_prob=args.ax_prob,
+        ax_pos_prob=args.ax_pos_prob,
         tensor_prob=args.tensor_prob,
         par_prob=args.par_prob,
+        stop_prob=args.stop_prob,
         single_formula=args.single_formula,
     )
 
