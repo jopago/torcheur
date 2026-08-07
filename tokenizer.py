@@ -1,3 +1,5 @@
+import numpy as np
+
 class FormulaTokenizer:
     def __init__(self):
         self.vocab = set()
@@ -101,40 +103,3 @@ class FormulaTokenizer:
             self.decode_map[i]
             for i in code
         )
-
-
-with open("training.txt", "r", encoding="utf-8") as f:
-    training_text = f.read()
-
-tokenizer = FormulaTokenizer()
-
-base_vocab_size = len(set(training_text))
-tokenizer.train(training_text, n_merges=100)
-
-print("Base vocabulary size:", base_vocab_size)
-print("Final vocabulary size:", len(tokenizer.code_map))
-print()
-
-example = '"⊢ ((p0 ⅋ p0⊥) ⊗ (p1⊥ ⅋ p1))",otimes(0,[],parr(0,ax),parr(0,ax))'
-
-tokens = tokenizer.tokenize(example)
-encoded = tokenizer.encode(example)
-decoded = tokenizer.decode(encoded)
-
-print("Original:")
-print(example)
-print()
-
-print("Tokens:")
-print(tokens)
-print()
-
-print("Encoded:")
-print(encoded)
-print()
-
-print("Decoded:")
-print(decoded)
-print()
-
-assert decoded == example
