@@ -1,0 +1,140 @@
+class FormulaTokenizer:
+    def __init__(self):
+        self.vocab = set()
+        self.merges = []
+        self.code_map = {}
+        self.decode_map = {}
+
+    @staticmethod
+    def _merge_pair(tokens: list[str], pair: tuple[str, str], new_token: str):
+        a, b = pair
+        out = []
+        i = 0
+
+        while i < len(tokens):
+            if i + 1 < len(tokens) and tokens[i] == a and tokens[i + 1] == b:
+                out.append(new_token)
+                i += 2
+            else:
+                out.append(tokens[i])
+                i += 1
+
+        return out
+
+    def train(self, text: str, n_merges: int):
+        tokens = list(text)
+        self.vocab = set(tokens)
+        self.merges = []
+
+        for _ in range(n_merges):
+            pair_counts = {}
+
+            for a, b in zip(tokens, tokens[1:]):
+                # One training example per line, skip multi-lines
+                if "\n" in a or "\n" in b:
+                    continue
+                if (a, b) in pair_counts.keys():
+                    pair_counts[(a, b)] += 1
+                else:
+                    pair_counts[(a, b)] = 1
+
+            if not pair_counts:
+                break
+
+            # Find most-frequent pair
+            candidates = [
+                (count, pair)
+                for pair, count in pair_counts.items()
+                if pair[0] + pair[1] not in self.vocab
+            ]
+
+            if not candidates:
+                break
+
+            _, (a, b) = max(
+                candidates,
+                key=lambda x: (x[0], x[1])
+            )
+
+            # new token is a+b
+            new_token = a + b
+            self.vocab.add(new_token)
+            self.merges.append((a, b, new_token))
+
+            tokens = self._merge_pair(tokens, (a, b), new_token)
+
+        # Stable IDs
+        base_tokens = sorted(
+            [t for t in self.vocab if len(t) == 1]
+        )
+
+        merged_tokens = [new_token for _, _, new_token in self.merges]
+
+        vocab = base_tokens + merged_tokens
+
+        self.code_map = {
+            token: i
+            for i, token in enumerate(vocab)
+        }
+
+        self.decode_map = {
+            i: token
+            for token, i in self.code_map.items()
+        }
+
+    def tokenize(self, text: str) -> list[str]:
+        tokens = list(text)
+
+        for a, b, new_token in self.merges:
+            tokens = self._merge_pair(tokens, (a, b), new_token)
+
+        return tokens
+
+    def encode(self, text: str) -> list[int]:
+        return [
+            self.code_map[token]
+            for token in self.tokenize(text)
+        ]
+
+    def decode(self, code: list[int]) -> str:
+        return "".join(
+            self.decode_map[i]
+            for i in code
+        )
+
+
+with open("training.txt", "r", encoding="utf-8") as f:
+    training_text = f.read()
+
+tokenizer = FormulaTokenizer()
+
+base_vocab_size = len(set(training_text))
+tokenizer.train(training_text, n_merges=100)
+
+print("Base vocabulary size:", base_vocab_size)
+print("Final vocabulary size:", len(tokenizer.code_map))
+print()
+
+example = '"⊢ ((p0 ⅋ p0⊥) ⊗ (p1⊥ ⅋ p1))",otimes(0,[],parr(0,ax),parr(0,ax))'
+
+tokens = tokenizer.tokenize(example)
+encoded = tokenizer.encode(example)
+decoded = tokenizer.decode(encoded)
+
+print("Original:")
+print(example)
+print()
+
+print("Tokens:")
+print(tokens)
+print()
+
+print("Encoded:")
+print(encoded)
+print()
+
+print("Decoded:")
+print(decoded)
+print()
+
+assert decoded == example
