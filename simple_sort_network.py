@@ -1,15 +1,17 @@
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.nn.functional import mse_loss
+from torch import nn, optim
 
 torch.manual_seed(0)
 
 n_features = 5
 n_samples = 1_000_000
 
-device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
+device = (
+    torch.accelerator.current_accelerator().type
+    if torch.accelerator.is_available()
+    else "cpu"
+)
 print(f"Using {device} device")
 
 X = torch.randn(n_samples, n_features).to(device)
@@ -26,7 +28,8 @@ model = nn.Sequential(
     nn.ReLU(),
     nn.Linear(hidden_dim, hidden_dim),
     nn.ReLU(),
-    nn.Linear(hidden_dim, output_dim))
+    nn.Linear(hidden_dim, output_dim),
+)
 model = model.to(device)
 
 loss_fn = nn.MSELoss()
@@ -52,7 +55,7 @@ for epoch in range(1, n_epochs + 1):
 
     # Print progress every 200 epochs
     if epoch % 200 == 0:
-        print(f'Epoch {epoch}/{n_epochs}, Loss: {loss.item():.5f}')
+        print(f"Epoch {epoch}/{n_epochs}, Loss: {loss.item():.5f}")
 
 # Test the trained model
 with torch.no_grad():
