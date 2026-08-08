@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 
 class FormulaTokenizer:
@@ -103,3 +105,28 @@ class FormulaTokenizer:
             self.decode_map[i]
             for i in code
         )
+
+    def save(self, path: str):
+        data = {
+            "merges": self.merges,
+            "code_map": self.code_map,
+        }
+
+        with open(path, "w") as f:
+            json.dump(data, f)
+
+    @classmethod
+    def load(cls, path: str):
+        with open(path) as f:
+            data = json.load(f)
+
+        tokenizer = cls()
+
+        tokenizer.merges = [tuple(x) for x in data["merges"]]
+        tokenizer.code_map = data["code_map"]
+        tokenizer.decode_map = {
+            i: token for token, i in tokenizer.code_map.items()
+        }
+        tokenizer.vocab = set(tokenizer.code_map)
+
+        return tokenizer
