@@ -1,14 +1,15 @@
 import torch
+
 from models.mll_network import MLLNetwork, Config
-from models.mll_transformer import MLLTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
-
 print(lines[142_359])
+
+SEED = 42
+torch.manual_seed(SEED)
 tokenizer = FormulaTokenizer.load("tokenizer_mll.json")
-print(tokenizer.vocab)
 vocab_size = len(tokenizer.vocab)
 
 device = "mps"
@@ -20,14 +21,14 @@ config = Config(vocab_size=vocab_size,
                 hidden_dim=256)
 model = MLLNetwork(config)
 
-state = torch.load("checkpoints/mll_network_3000.pt")
+state = torch.load("checkpoints/mll_network_5500.pt")
 """state = {
     k.removeprefix("_orig_mod."): v
     for k, v in state.items()
 }"""
 
 model.load_state_dict(state)
-model = model.to(dce)
+model = model.to(device)
 model.eval()
 
 prompt = "\"⊢ c, (c⊥ ⊗ d), ((d⊥ ⊗ d) ⊗ j), d⊥, j⊥\""
@@ -36,12 +37,10 @@ print(prompt)
 
 # Encode prompt
 tokens = tokenizer.encode(prompt)
-max_length = 200
-
-# Greedy generation
+max_length = 250
+temperature = 0.01
 with torch.no_grad():
     while len(tokens) < max_length:
-
         x = torch.tensor(
             [tokens],
             dtype=torch.long,
@@ -50,12 +49,18 @@ with torch.no_grad():
 
         logits = model(x)
 
-        next_token = logits[0, -1].argmax().item()
+        next_logits = logits[0, -1] / temperature
+        probs = torch.softmax(next_logits, dim=-1)
+
+        next_token = torch.argmax(probs).item()
+        # sample
+        #next_token = torch.multinomial(probs, num_samples=1).item()
         tokens.append(next_token)
 
-        decoded_token = tokenizer.decode(tokens)
-        print(decoded_token)
-        if "." in decoded_token:
+        decoded = tokenizer.decode(tokens)
+        print(decoded)
+
+        if "." in decoded:
             break
 
 generated = tokenizer.decode(tokens)
