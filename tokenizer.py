@@ -1,6 +1,5 @@
 import json
 
-import numpy as np
 
 class FormulaTokenizer:
     def __init__(self):
@@ -8,6 +7,14 @@ class FormulaTokenizer:
         self.merges = []
         self.code_map = {}
         self.decode_map = {}
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        # remove whitespace
+        return "\n".join(
+            "".join(line.split())
+            for line in text.splitlines()
+        )
 
     @staticmethod
     def _merge_pair(tokens: list[str], pair: tuple[str, str], new_token: str):
@@ -26,10 +33,36 @@ class FormulaTokenizer:
         return out
 
     def train(self, text: str, n_merges: int):
+        text = self._normalize(text)
         tokens = list(text)
         self.vocab = set(tokens)
         self.merges = []
 
+        self.merges.append(('(', '(', "(("))
+        self.vocab.add("((")
+
+        self.merges.append(('|', '|', "||"))
+        self.vocab.add("||")
+
+        self.merges.append((')', ')', "))"))
+        self.vocab.add("))")
+
+        self.merges.append(('((', '(', "((("))
+        self.vocab.add("(((")
+
+        self.merges.append(('))', ')', ")))"))
+        self.vocab.add(")))")
+
+        self.merges.append(('[', ']', "[]"))
+        self.vocab.add("[]")
+
+        self.merges.append(('(', '[', "(["))
+        self.vocab.add("([")
+
+        self.merges.append((']', ')', "])"))
+        self.vocab.add("])")
+
+        """
         for _ in range(n_merges):
             pair_counts = {}
 
@@ -65,7 +98,7 @@ class FormulaTokenizer:
             self.vocab.add(new_token)
             self.merges.append((a, b, new_token))
 
-            tokens = self._merge_pair(tokens, (a, b), new_token)
+            tokens = self._merge_pair(tokens, (a, b), new_token)"""
 
         # Stable IDs
         base_tokens = sorted(
@@ -87,6 +120,7 @@ class FormulaTokenizer:
         }
 
     def tokenize(self, text: str) -> list[str]:
+        text = self._normalize(text)
         tokens = list(text)
 
         for a, b, new_token in self.merges:

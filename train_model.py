@@ -1,49 +1,54 @@
 import torch
 from torch import nn
 
-from mll_network import Config, MLLNetwork
+from models.mll_network import Config, MLLNetwork
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
 
+test_lines = lines[130_000:200_000]
 lines = lines[:100_000]
-test_lines = lines[100_000:150_000]
 
 # Train the tokenizer on 10k lines
 tokenizer_training_text = lines[:10_000]
 
-"""
 # Train tokenizer
-tokenizer = FormulaTokenizer()
-tokenizer.train("\n".join(tokenizer_training_text), n_merges=100)
-tokenizer.save("tokenzier_mll.json")
-"""
+#tokenizer = FormulaTokenizer()
+#tokenizer.train("\n".join(tokenizer_training_text), n_merges=30)
+#tokenizer.save("tokenizer_mll.json")
 
 tokenizer = FormulaTokenizer.load("tokenizer_mll.json")
+
 vocab_size = len(tokenizer.vocab)
 print("Vocab size:", vocab_size)
 
-config = Config(vocab_size=vocab_size)
+context_size = 250
+config = Config(vocab_size=vocab_size,
+                max_seq_len=context_size,
+                n_layers=2,
+                embedding_dim=64,
+                hidden_dim=256)
 device = "mps"
-raw_model = MLLNetwork(config).to(device)
-model = torch.compile(raw_model)
+model = MLLNetwork(config).to(device)
+# model = torch.compile(raw_model)
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
-loss = nn.CrossEntropyLoss(ignore_index=-1)
+optimizer = torch.optim.AdamW(
+    model.parameters(),
+    lr=3e-3,
+    weight_decay=0.0)
 
-context_size = 128
 batch_size = 64
 
-encoded = [
-    torch.tensor(tokenizer.encode(line)[:context_size + 1], dtype=torch.long)
-    for line in lines
-]
-
+#encoded = [
+#    torch.tensor(tokenizer.encode(line)[:context_size + 1], dtype=torch.long)
+#    for line in lines
+#]
+#torch.save(encoded, f"encoded_training_set.pt")
+encoded = torch.load("encoded_training_set.pt")
 print("training...")
-for step in range(10_000):
-    seqs = [encoded[i] for i in torch.randint(len(encoded), (batch_size,))]
 
+def make_xy(seqs):
     max_len = max(len(s) for s in seqs)
 
     x = torch.zeros(batch_size, max_len - 1, dtype=torch.long)
@@ -57,6 +62,12 @@ for step in range(10_000):
     x = x.to(device)
     y = y.to(device)
 
+    return x, y
+
+for step in range(20_000):
+    seqs = [encoded[i] for i in torch.randint(len(encoded), (batch_size,))]
+
+    x, y = make_xy(seqs)
     logits = model(x)
 
     loss = torch.nn.functional.cross_entropy(
@@ -67,14 +78,22 @@ for step in range(10_000):
 
     pred = logits.argmax(dim=-1)
     mask = y != -1
-
     accuracy = (pred[mask] == y[mask]).float().mean()
 
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
 
+    # test acc
+    #with torch.no_grad():
+        #seqs_test = [torch.tensor(tokenizer.encode(test_lines[i])[:context_size + 1], dtype=torch.long) for i in torch.randint(len(test_lines), (batch_size,))]
+        #x_test, y_test = make_xy(seqs_test)
+        #logits = model(x_test)
+        #pred = logits.argmax(dim=-1)
+        #mask = y_test != -1
+        #accuracy_test = (pred[mask] == y_test[mask]).float().mean()
+
     if step % 10 == 0:
-        print(step, loss.item(), " accuracy = ", accuracy.item())
+        print(step, loss.item(), " train accuracy = ", accuracy.item())
     if step % 500 == 0:
-        torch.save(model.state_dict(), f"mll_model_{step}.pt")
+        torch.save(model.state_dict(), f"checkpoints/mll_network_{step}.pt")
