@@ -1,12 +1,17 @@
 from dataclasses import dataclass
+
 import torch.nn as nn
 
 @dataclass
 class Config:
     hidden_dim: int = 256
-    embedding_dim: int = 128
-    n_layers: int = 2
-    vocab_size: int = 132
+    embedding_dim: int = 32
+    n_layers: int = 3
+    vocab_size: int = 186
+    n_heads: int = 4
+    ff_dim: int = 256
+    max_seq_len: int = 128
+
 
 class MLLNetwork(nn.Module):
     def __init__(self, cfg: Config):

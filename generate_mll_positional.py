@@ -540,7 +540,7 @@ def generate_dataset(
 def main() -> None:
     ap = argparse.ArgumentParser()
 
-    ap.add_argument("--n", type=int, default=500000)
+    ap.add_argument("--n", type=int, default=150000)
     ap.add_argument("--out", type=Path, default=Path("mll_positional.txt"))
     ap.add_argument("--seed", type=int, default=0)
 
