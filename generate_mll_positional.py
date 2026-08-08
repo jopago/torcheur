@@ -490,7 +490,7 @@ def line_str(proof: Proof) -> str:
     if not check(proof):
         raise RuntimeError("generated invalid proof")
     sequent = json.dumps(sstr(proof.sequent), ensure_ascii=False)
-    return f"{sequent} || {proof_str(proof)}"
+    return f"{sequent} || {proof_str(proof)}."
 
 
 # =========================
