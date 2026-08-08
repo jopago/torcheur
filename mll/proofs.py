@@ -44,9 +44,6 @@ class TensorRule:
     right: Proof
 
 
-Proof = Ax | OneRule | BotRule | ParRule | TensorRule
-
-
 def tensor_premises(
     seq: Sequent,
     principal_index: int,
@@ -89,9 +86,12 @@ def tensor_premises(
     return tuple(left_sequent), tuple(right_sequent)
 
 
+Proof = Ax | OneRule | BotRule | ParRule | TensorRule
+
+
 def proof_str(proof: Proof) -> str:
     if isinstance(proof, Ax):
-        return "ax"
+        return "AX"
     if isinstance(proof, OneRule):
         return "𝟙"
     if isinstance(proof, BotRule):

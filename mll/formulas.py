@@ -61,7 +61,7 @@ def dual(f: Formula) -> Formula:
 
 def fstr(f: Formula) -> str:
     if isinstance(f, Atom):
-        return f"{f.name}⊥" if f.neg else f.name
+        return f"¬{f.name}" if f.neg else f.name
     if isinstance(f, One):
         return "𝟙"
     if isinstance(f, Bottom):

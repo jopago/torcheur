@@ -40,7 +40,7 @@ def main() -> None:
         "--ax-pos-prob",
         type=float,
         default=0.50,
-        help="given an atomic axiom, probability of ⊢ A, A⊥ (else ⊢ A⊥, A)",
+        help="given an atomic axiom, probability of ⊢ a, ¬a (else ⊢ ¬a, a)",
     )
     ap.add_argument(
         "--tensor-prob",

@@ -1,6 +1,6 @@
 import torch
 
-from models.mll_network import MLLNetwork, Config
+from models.mll_network import Config, MLLNetwork
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
@@ -14,11 +14,9 @@ vocab_size = len(tokenizer.vocab)
 
 device = "mps"
 
-config = Config(vocab_size=vocab_size,
-                max_seq_len=250,
-                n_layers=2,
-                embedding_dim=64,
-                hidden_dim=256)
+config = Config(
+    vocab_size=vocab_size, max_seq_len=250, n_layers=2, embedding_dim=64, hidden_dim=256
+)
 model = MLLNetwork(config)
 
 state = torch.load("checkpoints/mll_network_5500.pt")
@@ -31,7 +29,7 @@ model.load_state_dict(state)
 model = model.to(device)
 model.eval()
 
-prompt = "\"⊢ c, (c⊥ ⊗ d), ((d⊥ ⊗ d) ⊗ j), d⊥, j⊥\""
+prompt = '"⊢ c, (c⊥ ⊗ d), ((d⊥ ⊗ d) ⊗ j), d⊥, j⊥"'
 print("\nPROMPT:")
 print(prompt)
 
@@ -54,7 +52,7 @@ with torch.no_grad():
 
         next_token = torch.argmax(probs).item()
         # sample
-        #next_token = torch.multinomial(probs, num_samples=1).item()
+        # next_token = torch.multinomial(probs, num_samples=1).item()
         tokens.append(next_token)
 
         decoded = tokenizer.decode(tokens)
