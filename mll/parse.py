@@ -92,17 +92,18 @@ class Parser:
             return Atom(self.parse_atom_name(), neg=True)
         if not self.eof() and self.text[self.i].islower():
             return Atom(self.parse_atom_name(), neg=False)
-        if self.try_eat("("):
+        if self.try_eat("⊗("):
             left = self.parse_formula()
-            if self.try_eat(" ⊗ "):
-                right = self.parse_formula()
-                self.eat(")")
-                return Tensor(left, right)
-            if self.try_eat(" ⅋ "):
-                right = self.parse_formula()
-                self.eat(")")
-                return Par(left, right)
-            raise ParseError(f"expected ⊗ or ⅋ at {self.i}")
+            self.eat(",")
+            right = self.parse_formula()
+            self.eat(")")
+            return Tensor(left, right)
+        if self.try_eat("⅋("):
+            left = self.parse_formula()
+            self.eat(",")
+            right = self.parse_formula()
+            self.eat(")")
+            return Par(left, right)
         raise ParseError(f"unexpected formula at {self.i}: {self.remaining()[:20]!r}")
 
     def parse_sequent(self) -> Sequent:

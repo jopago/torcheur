@@ -67,7 +67,7 @@ def fstr(f: Formula) -> str:
     if isinstance(f, Bottom):
         return "⊥"
     if isinstance(f, Tensor):
-        return f"({fstr(f.left)} ⊗ {fstr(f.right)})"
+        return f"⊗({fstr(f.left)},{fstr(f.right)})"
     if isinstance(f, Par):
-        return f"({fstr(f.left)} ⅋ {fstr(f.right)})"
+        return f"⅋({fstr(f.left)},{fstr(f.right)})"
     raise TypeError(type(f))
