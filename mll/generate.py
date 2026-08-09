@@ -3,8 +3,8 @@ from __future__ import annotations
 import random
 from pathlib import Path
 
-from .formulas import Atom, Bottom, Formula, One, Par, Tensor, atom_name, dual
-from .proofs import (
+from formulas import Atom, Bottom, Formula, One, Par, Tensor, atom_name, dual
+from proofs import (
     Ax,
     BotRule,
     OneRule,

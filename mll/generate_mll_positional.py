@@ -5,13 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .generate import generate_dataset
-
+from generate import generate_dataset
 
 def main() -> None:
     ap = argparse.ArgumentParser()
 
-    ap.add_argument("--n", type=int, default=500000)
+    ap.add_argument("--n", type=int, default=200000)
     ap.add_argument("--out", type=Path, default=Path("mll_positional.txt"))
     ap.add_argument("--seed", type=int, default=0)
 
