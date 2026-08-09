@@ -1,6 +1,7 @@
 import torch
 
-from models.mll_network import Config, MLLNetwork
+from models.mll_network import Config
+from models.mll_transformer import MLLTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
@@ -26,17 +27,23 @@ print("Vocab: ", tokenizer.vocab)
 context_size = 250
 config = Config(vocab_size=vocab_size,
                 max_seq_len=context_size,
-                n_layers=2,
-                embedding_dim=64,
-                hidden_dim=256)
+                n_layers=4,
+                embedding_dim=256,
+                n_heads=4,
+                ff_dim=512)
 device = "mps"
-model = MLLNetwork(config).to(device)
+model = MLLTransformer(config).to(device)
 # model = torch.compile(raw_model)
 
 optimizer = torch.optim.AdamW(
     model.parameters(),
-    lr=3e-3,
+    lr=3e-4,
     weight_decay=0.0)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    optimizer,
+    T_max=10_000,
+    eta_min=1e-5,
+)
 
 batch_size = 64
 
@@ -93,6 +100,7 @@ for step in range(20_000):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    scheduler.step()
 
     # test acc
     with torch.no_grad():
@@ -106,4 +114,4 @@ for step in range(20_000):
     if step % 10 == 0:
         print(step, loss.item(), " train accuracy = ", accuracy.item(), " test accuracy = ", accuracy_test.item())
     if step % 500 == 0:
-        torch.save(model.state_dict(), f"checkpoints/mll_network_{step}.pt")
+        torch.save(model.state_dict(), f"checkpoints/mll_transformer_{step}.pt")
