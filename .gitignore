@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 .venv/
 mll_positional.txt
+.idea/
+checkpoints/
+*.pt
