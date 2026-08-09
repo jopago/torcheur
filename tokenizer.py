@@ -1,6 +1,5 @@
 import json
 
-
 class FormulaTokenizer:
     def __init__(self):
         self.vocab = set()
@@ -38,31 +37,6 @@ class FormulaTokenizer:
         self.vocab = set(tokens)
         self.merges = []
 
-        self.merges.append(('(', '(', "(("))
-        self.vocab.add("((")
-
-        self.merges.append(('|', '|', "||"))
-        self.vocab.add("||")
-
-        self.merges.append((')', ')', "))"))
-        self.vocab.add("))")
-
-        self.merges.append(('((', '(', "((("))
-        self.vocab.add("(((")
-
-        self.merges.append(('))', ')', ")))"))
-        self.vocab.add(")))")
-
-        self.merges.append(('[', ']', "[]"))
-        self.vocab.add("[]")
-
-        self.merges.append(('(', '[', "(["))
-        self.vocab.add("([")
-
-        self.merges.append((']', ')', "])"))
-        self.vocab.add("])")
-
-        """
         for _ in range(n_merges):
             pair_counts = {}
 
@@ -98,7 +72,7 @@ class FormulaTokenizer:
             self.vocab.add(new_token)
             self.merges.append((a, b, new_token))
 
-            tokens = self._merge_pair(tokens, (a, b), new_token)"""
+            tokens = self._merge_pair(tokens, (a, b), new_token)
 
         # Stable IDs
         base_tokens = sorted(

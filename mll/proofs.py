@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from formulas import Formula, Tensor, fstr
+from mll.formulas import Formula, Tensor, fstr
 
 Sequent = tuple[Formula, ...]
 

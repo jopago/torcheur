@@ -1,5 +1,4 @@
 import torch
-from torch import nn
 
 from models.mll_network import Config, MLLNetwork
 from tokenizer import FormulaTokenizer
@@ -8,20 +7,21 @@ with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
 
 test_lines = lines[130_000:200_000]
-lines = lines[:100_000]
+lines = lines[:130_000]
 
 # Train the tokenizer on 10k lines
 tokenizer_training_text = lines[:10_000]
 
 # Train tokenizer
-#tokenizer = FormulaTokenizer()
-#tokenizer.train("\n".join(tokenizer_training_text), n_merges=30)
-#tokenizer.save("tokenizer_mll.json")
+tokenizer = FormulaTokenizer()
+# tokenizer.train("\n".join(tokenizer_training_text), n_merges=30)
+# tokenizer.save("tokenizer_mll.json")
 
 tokenizer = FormulaTokenizer.load("tokenizer_mll.json")
 
 vocab_size = len(tokenizer.vocab)
 print("Vocab size:", vocab_size)
+print("Vocab: ", tokenizer.vocab)
 
 context_size = 250
 config = Config(vocab_size=vocab_size,
@@ -40,13 +40,22 @@ optimizer = torch.optim.AdamW(
 
 batch_size = 64
 
-#encoded = [
+# encoded = [
 #    torch.tensor(tokenizer.encode(line)[:context_size + 1], dtype=torch.long)
 #    for line in lines
-#]
-#torch.save(encoded, f"encoded_training_set.pt")
+# ]
+# encoded_test = [
+#    torch.tensor(tokenizer.encode(line)[:context_size + 1], dtype=torch.long)
+#    for line in test_lines
+# ]
+# torch.save(encoded, f"encoded_training_set.pt")
+# torch.save(encoded_test, f"encoded_test_set.pt")
+
 encoded = torch.load("encoded_training_set.pt")
+encoded_test = torch.load("encoded_test_set.pt")
+
 print("training...")
+
 
 def make_xy(seqs):
     max_len = max(len(s) for s in seqs)
@@ -63,6 +72,7 @@ def make_xy(seqs):
     y = y.to(device)
 
     return x, y
+
 
 for step in range(20_000):
     seqs = [encoded[i] for i in torch.randint(len(encoded), (batch_size,))]
@@ -85,15 +95,15 @@ for step in range(20_000):
     optimizer.step()
 
     # test acc
-    #with torch.no_grad():
-        #seqs_test = [torch.tensor(tokenizer.encode(test_lines[i])[:context_size + 1], dtype=torch.long) for i in torch.randint(len(test_lines), (batch_size,))]
-        #x_test, y_test = make_xy(seqs_test)
-        #logits = model(x_test)
-        #pred = logits.argmax(dim=-1)
-        #mask = y_test != -1
-        #accuracy_test = (pred[mask] == y_test[mask]).float().mean()
+    with torch.no_grad():
+        seqs_test = [encoded_test[i] for i in torch.randint(len(encoded_test), (batch_size,))]
+        x_test, y_test = make_xy(seqs_test)
+        logits = model(x_test)
+        pred = logits.argmax(dim=-1)
+        mask = y_test != -1
+        accuracy_test = (pred[mask] == y_test[mask]).float().mean()
 
     if step % 10 == 0:
-        print(step, loss.item(), " train accuracy = ", accuracy.item())
+        print(step, loss.item(), " train accuracy = ", accuracy.item(), " test accuracy = ", accuracy_test.item())
     if step % 500 == 0:
         torch.save(model.state_dict(), f"checkpoints/mll_network_{step}.pt")

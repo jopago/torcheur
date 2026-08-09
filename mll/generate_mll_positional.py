@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from generate import generate_dataset
+from mll.generate import generate_dataset
 
 def main() -> None:
     ap = argparse.ArgumentParser()

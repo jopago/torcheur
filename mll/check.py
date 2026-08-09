@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from .formulas import Bottom, One, Par, dual
-from .parse import (
+from mll.formulas import Bottom, One, Par, dual
+from mll.parse import (
     RawAx,
     RawBot,
     RawOne,
@@ -10,7 +10,7 @@ from .parse import (
     RawTensor,
     try_parse,
 )
-from .proofs import Sequent, tensor_premises
+from mll.proofs import Sequent, tensor_premises
 
 
 def is_valid(sequent: Sequent, raw: RawProof) -> bool:

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .formulas import Atom, Bottom, Formula, One, Par, Tensor
-from .proofs import Sequent
+from mll.formulas import Atom, Bottom, Formula, One, Par, Tensor
+from mll.proofs import Sequent
 
 
 class ParseError(Exception):
@@ -43,6 +43,9 @@ class RawTensor:
 RawProof = RawAx | RawOne | RawBot | RawPar | RawTensor
 
 
+WHITESPACE = " \t\r\n"
+
+
 class Parser:
     def __init__(self, text: str) -> None:
         self.text = text
@@ -54,7 +57,12 @@ class Parser:
     def eof(self) -> bool:
         return self.i >= len(self.text)
 
+    def skip_ws(self) -> None:
+        while not self.eof() and self.text[self.i] in WHITESPACE:
+            self.i += 1
+
     def eat(self, expected: str) -> None:
+        self.skip_ws()
         if not self.text.startswith(expected, self.i):
             raise ParseError(
                 f"expected {expected!r} at {self.i}, got {self.remaining()[:20]!r}"
@@ -62,12 +70,14 @@ class Parser:
         self.i += len(expected)
 
     def try_eat(self, expected: str) -> bool:
+        self.skip_ws()
         if self.text.startswith(expected, self.i):
             self.i += len(expected)
             return True
         return False
 
     def parse_int(self) -> int:
+        self.skip_ws()
         start = self.i
         if self.eof() or not self.text[self.i].isdigit():
             raise ParseError(f"expected integer at {self.i}")
@@ -76,6 +86,7 @@ class Parser:
         return int(self.text[start : self.i])
 
     def parse_atom_name(self) -> str:
+        self.skip_ws()
         start = self.i
         if self.eof() or not self.text[self.i].islower():
             raise ParseError(f"expected atom name at {self.i}")
@@ -84,6 +95,7 @@ class Parser:
         return self.text[start : self.i]
 
     def parse_formula(self) -> Formula:
+        self.skip_ws()
         if self.try_eat("𝟙"):
             return One()
         if self.try_eat("⊥"):
@@ -107,9 +119,9 @@ class Parser:
         raise ParseError(f"unexpected formula at {self.i}: {self.remaining()[:20]!r}")
 
     def parse_sequent(self) -> Sequent:
-        self.eat("⊢ ")
+        self.eat("⊢")
         formulas: list[Formula] = [self.parse_formula()]
-        while self.try_eat(", "):
+        while self.try_eat(","):
             formulas.append(self.parse_formula())
         return tuple(formulas)
 
@@ -160,7 +172,7 @@ def parse(line: str) -> tuple[Sequent, RawProof]:
     text = line.strip()
     parser = Parser(text)
     sequent = parser.parse_sequent()
-    parser.eat(" || ")
+    parser.eat("||")
     raw = parser.parse_proof_term()
     parser.eat(".")
     if not parser.eof():
