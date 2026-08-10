@@ -1,8 +1,8 @@
 import torch
 
 from mll.check import check_proof, check_syntax
-from models.mll_network import Config, MLLNetwork
-from models.mll_transformer import MLLTransformer
+from models.mll_network import Config
+from models.mll_transformer import FullProofTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
@@ -25,7 +25,7 @@ config = Config(
     ff_dim=512,
 )
 
-model = MLLTransformer(config)
+model = FullProofTransformer(config)
 
 state = torch.load("checkpoints/mll_transformer_8000.pt")
 model.load_state_dict(state)

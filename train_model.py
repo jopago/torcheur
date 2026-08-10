@@ -1,7 +1,7 @@
 import torch
 
 from models.mll_network import Config
-from models.mll_transformer import MLLTransformer
+from models.mll_transformer import FullProofTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
@@ -34,7 +34,7 @@ config = Config(
     ff_dim=256,
 )
 device = "mps"
-model = MLLTransformer(config).to(device)
+model = FullProofTransformer(config).to(device)
 # state = torch.load("checkpoints/mll_transformer_8000.pt")
 # model.load_state_dict(state)
 

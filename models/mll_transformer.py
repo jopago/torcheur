@@ -1,10 +1,10 @@
-from torch import nn
 import torch
+from torch import nn
 
 from models.mll_network import Config
 
 
-class MLLTransformer(nn.Module):
+class FullProofTransformer(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
 
@@ -29,7 +29,7 @@ class MLLTransformer(nn.Module):
 
     def forward(self, tokens):
         # tokens: [B, T]
-        B, T = tokens.shape
+        _, T = tokens.shape
 
         positions = torch.arange(T, device=tokens.device)
 
