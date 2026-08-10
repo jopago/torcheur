@@ -1,8 +1,8 @@
 import torch
 
 from mll.check import check_proof, check_syntax
-from models.mll_network import Config
-from models.mll_transformer import FullProofTransformer
+from models.configs import Config
+from models.mll_transformers import FullProofTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
