@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 
+
 @dataclass
 class Config:
     hidden_dim: int = 256

@@ -16,21 +16,18 @@ vocab_size = len(tokenizer.vocab)
 
 device = "mps"
 
-config = Config(vocab_size=vocab_size,
-                max_seq_len=250,
-                n_layers=4,
-                embedding_dim=256,
-                n_heads=4,
-                ff_dim=512)
+config = Config(
+    vocab_size=vocab_size,
+    max_seq_len=250,
+    n_layers=4,
+    embedding_dim=256,
+    n_heads=4,
+    ff_dim=512,
+)
 
 model = MLLTransformer(config)
 
 state = torch.load("checkpoints/mll_transformer_8000.pt")
-"""state = {
-    k.removeprefix("_orig_mod."): v
-    for k, v in state.items()
-}"""
-
 model.load_state_dict(state)
 model = model.to(device)
 model.eval()

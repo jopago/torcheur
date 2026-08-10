@@ -3,6 +3,7 @@ import torch
 
 from models.mll_network import Config
 
+
 class MLLTransformer(nn.Module):
     def __init__(self, cfg: Config):
         super().__init__()
@@ -32,12 +33,15 @@ class MLLTransformer(nn.Module):
 
         positions = torch.arange(T, device=tokens.device)
 
-        x = self.token_embedding(tokens) + self.position_embedding(positions)[None, :, :]
+        x = (
+            self.token_embedding(tokens)
+            + self.position_embedding(positions)[None, :, :]
+        )
 
         # Prevent token t from seeing future tokens
         causal_mask = torch.triu(
-            torch.ones(T, T, device=tokens.device, dtype=torch.bool),
-            diagonal=1)
+            torch.ones(T, T, device=tokens.device, dtype=torch.bool), diagonal=1
+        )
 
         x = self.transformer(x, mask=causal_mask)
         x = self.norm(x)

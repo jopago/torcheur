@@ -7,6 +7,7 @@ from pathlib import Path
 
 from mll.generate import generate_dataset
 
+
 def main() -> None:
     ap = argparse.ArgumentParser()
 
