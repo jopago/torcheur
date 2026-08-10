@@ -4,6 +4,7 @@ import random
 from pathlib import Path
 
 from mll.formulas import Atom, Bottom, Formula, One, Par, Tensor, atom_name, dual
+from mll.negative_normalization import normalize
 from mll.proofs import (
     Ax,
     BotRule,
@@ -253,3 +254,63 @@ def generate_dataset(
                 single_formula=single_formula,
             )
             f.write(f"{sstr(proof.sequent)} || {proof_str(proof)}.\n")
+
+
+def iter_tensor_lines(proof: Proof) -> list[str]:
+    """One dataset line per ⊗ rule: sequent || index, [goes_left...]."""
+    lines: list[str] = []
+
+    if isinstance(proof, (BotRule, ParRule)):
+        lines.extend(iter_tensor_lines(proof.child))
+    elif isinstance(proof, TensorRule):
+        left_set = set(proof.left_positions)
+        main_index = proof.index
+        encoded = []
+        for i in range(len(proof.sequent)):
+            if i == main_index:
+                encoded.append(2)
+            elif i in left_set:
+                encoded.append(1)
+            else:
+                encoded.append(0)
+        lines.append(f"{sstr(proof.sequent)} || {encoded}.")
+        lines.extend(iter_tensor_lines(proof.left))
+        lines.extend(iter_tensor_lines(proof.right))
+
+    return lines
+
+
+def generate_normalized_dataset(
+    out: Path,
+    n: int,
+    seed: int,
+    min_leaves: int,
+    max_leaves: int,
+    n_atoms: int,
+    one_prob: float,
+    ax_prob: float,
+    ax_pos_prob: float,
+    tensor_prob: float,
+    par_prob: float,
+    stop_prob: float,
+    single_formula: bool,
+) -> None:
+    rng = random.Random(seed)
+
+    with out.open("w", encoding="utf-8") as f:
+        for _ in range(n):
+            proof = generate_proof(
+                rng=rng,
+                n_leaves=rng.randint(min_leaves, max_leaves),
+                n_atoms=n_atoms,
+                one_prob=one_prob,
+                ax_prob=ax_prob,
+                ax_pos_prob=ax_pos_prob,
+                tensor_prob=tensor_prob,
+                par_prob=par_prob,
+                stop_prob=stop_prob,
+                single_formula=single_formula,
+            )
+            normalized = normalize(proof)
+            for line in iter_tensor_lines(normalized):
+                f.write(f"{line}\n")
