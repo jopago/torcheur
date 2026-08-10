@@ -1,5 +1,6 @@
 import json
 
+
 class FormulaTokenizer:
     def __init__(self):
         self.vocab = set()
@@ -10,10 +11,7 @@ class FormulaTokenizer:
     @staticmethod
     def _normalize(text: str) -> str:
         # remove whitespace
-        return "\n".join(
-            "".join(line.split())
-            for line in text.splitlines()
-        )
+        return "\n".join("".join(line.split()) for line in text.splitlines())
 
     @staticmethod
     def _merge_pair(tokens: list[str], pair: tuple[str, str], new_token: str):
@@ -62,10 +60,7 @@ class FormulaTokenizer:
             if not candidates:
                 break
 
-            _, (a, b) = max(
-                candidates,
-                key=lambda x: (x[0], x[1])
-            )
+            _, (a, b) = max(candidates, key=lambda x: (x[0], x[1]))
 
             # new token is a+b
             new_token = a + b
@@ -75,23 +70,15 @@ class FormulaTokenizer:
             tokens = self._merge_pair(tokens, (a, b), new_token)
 
         # Stable IDs
-        base_tokens = sorted(
-            [t for t in self.vocab if len(t) == 1]
-        )
+        base_tokens = sorted([t for t in self.vocab if len(t) == 1])
 
         merged_tokens = [new_token for _, _, new_token in self.merges]
 
         vocab = base_tokens + merged_tokens
 
-        self.code_map = {
-            token: i
-            for i, token in enumerate(vocab)
-        }
+        self.code_map = {token: i for i, token in enumerate(vocab)}
 
-        self.decode_map = {
-            i: token
-            for token, i in self.code_map.items()
-        }
+        self.decode_map = {i: token for token, i in self.code_map.items()}
 
     def tokenize(self, text: str) -> list[str]:
         text = self._normalize(text)
@@ -103,16 +90,10 @@ class FormulaTokenizer:
         return tokens
 
     def encode(self, text: str) -> list[int]:
-        return [
-            self.code_map[token]
-            for token in self.tokenize(text)
-        ]
+        return [self.code_map[token] for token in self.tokenize(text)]
 
     def decode(self, code: list[int]) -> str:
-        return "".join(
-            self.decode_map[i]
-            for i in code
-        )
+        return "".join(self.decode_map[i] for i in code)
 
     def save(self, path: str):
         data = {
@@ -132,9 +113,7 @@ class FormulaTokenizer:
 
         tokenizer.merges = [tuple(x) for x in data["merges"]]
         tokenizer.code_map = data["code_map"]
-        tokenizer.decode_map = {
-            i: token for token, i in tokenizer.code_map.items()
-        }
+        tokenizer.decode_map = {i: token for token, i in tokenizer.code_map.items()}
         tokenizer.vocab = set(tokenizer.code_map)
 
         return tokenizer

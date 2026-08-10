@@ -1,16 +1,6 @@
-from dataclasses import dataclass
+from torch import nn
 
-import torch.nn as nn
-
-@dataclass
-class Config:
-    hidden_dim: int = 256
-    embedding_dim: int = 32
-    n_layers: int = 3
-    vocab_size: int = 186
-    n_heads: int = 4
-    ff_dim: int = 256
-    max_seq_len: int = 128
+from models.configs import Config
 
 
 class MLLNetwork(nn.Module):

@@ -1,14 +1,14 @@
 import torch
 
-from models.mll_network import Config
-from models.mll_transformer import MLLTransformer
+from models.configs import Config
+from models.mll_transformers import FullProofTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
 
-test_lines = lines[130_000:200_000]
-lines = lines[:130_000]
+test_lines = lines[200_000:300_000]
+lines = lines[:200_000]
 
 # Train the tokenizer on 10k lines
 tokenizer_training_text = lines[:10_000]
@@ -25,28 +25,31 @@ print("Vocab size:", vocab_size)
 print("Vocab: ", tokenizer.vocab)
 
 context_size = 250
-config = Config(vocab_size=vocab_size,
-                max_seq_len=context_size,
-                n_layers=4,
-                embedding_dim=256,
-                n_heads=4,
-                ff_dim=512)
+config = Config(
+    vocab_size=vocab_size,
+    max_seq_len=context_size,
+    n_layers=2,
+    embedding_dim=128,
+    n_heads=4,
+    ff_dim=256,
+)
 device = "mps"
-model = MLLTransformer(config).to(device)
+model = FullProofTransformer(config).to(device)
+# state = torch.load("checkpoints/mll_transformer_8000.pt")
+# model.load_state_dict(state)
+
 # model = torch.compile(raw_model)
 
-optimizer = torch.optim.AdamW(
-    model.parameters(),
-    lr=3e-4,
-    weight_decay=0.0)
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-3, weight_decay=0.0)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer,
-    T_max=10_000,
+    T_max=5000,
     eta_min=1e-5,
 )
 
 batch_size = 64
 
+# print("Encoding training and test set...")
 # encoded = [
 #    torch.tensor(tokenizer.encode(line)[:context_size + 1], dtype=torch.long)
 #    for line in lines
@@ -72,8 +75,8 @@ def make_xy(seqs):
 
     # x_t = seq_t, y_t = seq_{t+1}
     for i, s in enumerate(seqs):
-        x[i, :len(s) - 1] = s[:-1]
-        y[i, :len(s) - 1] = s[1:]
+        x[i, : len(s) - 1] = s[:-1]
+        y[i, : len(s) - 1] = s[1:]
 
     x = x.to(device)
     y = y.to(device)
@@ -104,7 +107,9 @@ for step in range(20_000):
 
     # test acc
     with torch.no_grad():
-        seqs_test = [encoded_test[i] for i in torch.randint(len(encoded_test), (batch_size,))]
+        seqs_test = [
+            encoded_test[i] for i in torch.randint(len(encoded_test), (batch_size,))
+        ]
         x_test, y_test = make_xy(seqs_test)
         logits = model(x_test)
         pred = logits.argmax(dim=-1)
@@ -112,6 +117,13 @@ for step in range(20_000):
         accuracy_test = (pred[mask] == y_test[mask]).float().mean()
 
     if step % 10 == 0:
-        print(step, loss.item(), " train accuracy = ", accuracy.item(), " test accuracy = ", accuracy_test.item())
+        print(
+            step,
+            loss.item(),
+            " train accuracy = ",
+            accuracy.item(),
+            " test accuracy = ",
+            accuracy_test.item(),
+        )
     if step % 500 == 0:
         torch.save(model.state_dict(), f"checkpoints/mll_transformer_{step}.pt")
