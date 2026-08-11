@@ -2,7 +2,7 @@ import ast
 
 import torch
 
-from mll.parse import parse_line
+from mll.parse import parse_normalized_line
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
 from tokenizer import FormulaTokenizer
@@ -15,7 +15,7 @@ test_lines = lines[200_000:300_000]
 lines = lines[:200_000]
 
 # Train the tokenizer on 10k formulas
-tokenizer_training_text = ["".join(parse_line(line)[0]) for line in lines[:10_000]]
+tokenizer_training_text = ["".join(parse_normalized_line(line)[0]) for line in lines[:10_000]]
 
 # Train tokenizer
 tokenizer = FormulaTokenizer()
@@ -62,7 +62,7 @@ def encode_formula_labels(dataset: list[str], config: StateActionConfig):
     encoded = []
 
     for line in dataset:
-        formulas, labels = parse_line(line)
+        formulas, labels = parse_normalized_line(line)
 
         formula_tokens = [
             torch.tensor(
