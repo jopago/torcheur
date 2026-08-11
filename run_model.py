@@ -8,7 +8,7 @@ from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
-print(lines[266_722])
+print(lines[289_519])
 
 SEED = 42
 # torch.manual_seed(SEED)
@@ -75,7 +75,7 @@ state = torch.load("checkpoints/mll_state_transformer_500.pt")
 model.load_state_dict(state)
 model = model.to(device)
 
-prompt = "⊢ f; ⊗(¬f,⊗(⊥,⅋(a,¬a))); ⊗(¬i,⅋(h,¬h)); ⊗(⅋(⊗(¬f,𝟙),⊗(⅋(¬f,f),f)),⊗(i,𝟙)) || [1, 2, 0, 0]."
+prompt = "⊢ ⊗(⅋(¬a,a),⊗(¬b,⅋(f,¬f))); ⊗(⅋(⊥,𝟙),b); ⊗(⊥,⊗(⊗(⅋(¬e,e),𝟙),𝟙)) || [0, 2, 1]."
 print("\nPROMPT:")
 print(prompt)
 
@@ -89,8 +89,6 @@ formula_tokens = [
     )
     for formula in formulas[: config.max_n_formulas]
 ]
-
-print("Tokens input:", formula_tokens)
 
 # Build [B=1, N, L] input tensor
 N = len(formula_tokens)
@@ -118,19 +116,6 @@ with torch.no_grad():
 
     predicted_split = split_probs.argmax().item()
 
-print("\nRESULT:")
-
-for i, formula in enumerate(formulas):
-    right_prob = side_probs[i, 0].item()
-    left_prob = side_probs[i, 1].item()
-
-    print(
-        f"{i}: {formula}"
-        f" | split={split_probs[i].item():.3f}"
-        f" | RIGHT={right_prob:.3f}"
-        f" | LEFT={left_prob:.3f}"
-        f" | target={labels[i]}"
-    )
 
 print("\nPredicted split index:", predicted_split)
 print("Predicted split formula:", formulas[predicted_split])
@@ -153,7 +138,6 @@ parser = Parser(statement)
 sequent = parser.parse_sequent()
 proof = builder.build_proof(sequent)
 
-print("PROOF")
 from mll.check import check_proof
 
-print(check_proof(proof) and proof.sequent == sequent)
+print("Proof valid", check_proof(proof) and proof.sequent == sequent)

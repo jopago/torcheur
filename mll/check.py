@@ -40,7 +40,7 @@ def check_proof(proof: Proof) -> bool:
         if not isinstance(proof.sequent[index], Bottom):
             return False
         expected = proof.sequent[:index] + proof.sequent[index + 1 :]
-        return expected == proof.child.sequent and check(proof.child)
+        return expected == proof.child.sequent and check_proof(proof.child)
 
     if isinstance(proof, ParRule):
         index = proof.index
@@ -55,7 +55,7 @@ def check_proof(proof: Proof) -> bool:
             + (principal.left, principal.right)
             + proof.sequent[index + 1 :]
         )
-        return expected == proof.child.sequent and check(proof.child)
+        return expected == proof.child.sequent and check_proof(proof.child)
 
     if isinstance(proof, TensorRule):
         if not (0 <= proof.index < len(proof.sequent)):
@@ -73,8 +73,8 @@ def check_proof(proof: Proof) -> bool:
         return (
             expected_left == proof.left.sequent
             and expected_right == proof.right.sequent
-            and check(proof.left)
-            and check(proof.right)
+            and check_proof(proof.left)
+            and check_proof(proof.right)
         )
 
     return False
