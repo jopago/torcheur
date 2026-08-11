@@ -121,7 +121,7 @@ class Parser:
     def parse_sequent(self) -> Sequent:
         self.eat("⊢")
         formulas: list[Formula] = [self.parse_formula()]
-        while self.try_eat(","):
+        while self.try_eat(";"):
             formulas.append(self.parse_formula())
         return tuple(formulas)
 
@@ -190,7 +190,7 @@ def try_parse(line: str) -> tuple[Sequent, RawProof] | None:
 import ast
 
 
-def parse_line(line: str):
+def parse_normalized_line(line: str):
     sequent, action = line.split("||", 1)
 
     formulas = [f.strip() for f in sequent.replace("⊢", "").strip().split(";")]
