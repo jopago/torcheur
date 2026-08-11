@@ -131,18 +131,24 @@ class StateActionTransformer(nn.Module):
         x = x.reshape(B * N, L, -1)
         flat_mask = token_mask.reshape(B * N, L)
 
+        attention_mask = flat_mask.clone()
+        fully_padded = attention_mask.all(dim=1)
+        attention_mask[fully_padded, 0] = False
+
         x = self.formula_transformer(
             x,
-            src_key_padding_mask=flat_mask,
+            src_key_padding_mask=attention_mask,
         )
 
-        # masked mean pooling over tokens
+        # Pour le pooling, on utilise le vrai masque
         valid = (~flat_mask).unsqueeze(-1)
 
         formula_embeddings = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
 
-        formula_embeddings = formula_embeddings.reshape(B, N, -1)
+        # Les slots correspondant à des formules inexistantes valent exactement 0
+        formula_embeddings[fully_padded] = 0.0
 
+        formula_embeddings = formula_embeddings.reshape(B, N, -1)
         # ---- Sequent encoding ----
 
         formula_positions = torch.arange(N, device=tokens.device)
@@ -165,7 +171,7 @@ class StateActionTransformer(nn.Module):
         # don't allow selecting padding
         split_logits = split_logits.masked_fill(
             formula_mask,
-            float("-inf"),
+            -1e6,
         )
 
         # [B, N, 2]

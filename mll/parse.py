@@ -185,3 +185,17 @@ def try_parse(line: str) -> tuple[Sequent, RawProof] | None:
         return parse(line)
     except ParseError:
         return None
+
+
+import ast
+
+
+def parse_line(line: str):
+    sequent, action = line.split("||", 1)
+
+    formulas = [f.strip() for f in sequent.replace("⊢", "").strip().split(";")]
+
+    # "[1, 1, 2]." -> [1, 1, 2]
+    labels = ast.literal_eval(action.strip().removesuffix("."))
+
+    return formulas, labels

@@ -1,80 +1,110 @@
 import torch
 
 from mll.check import check_proof, check_syntax
-from models.configs import Config
-from models.mll_transformers import FullProofTransformer
+from mll.parse import parse_line
+from models.configs import Config, StateActionConfig
+from models.mll_transformers import FullProofTransformer, StateActionTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
-print(lines[165_712])
+print(lines[266_722])
 
 SEED = 42
 # torch.manual_seed(SEED)
-tokenizer = FormulaTokenizer.load("tokenizer_mll.json")
+tokenizer = FormulaTokenizer.load("tokenizer_mll_state_action.json")
 vocab_size = len(tokenizer.vocab)
 
-device = "mps"
+device = "cpu"
 
-config = Config(
-    vocab_size=vocab_size,
-    max_seq_len=250,
-    n_layers=4,
-    embedding_dim=256,
+config = StateActionConfig(
+    vocab_size=vocab_size + 1,
+    embedding_dim=128,
     n_heads=4,
     ff_dim=512,
+    max_formula_len=64,
+    max_n_formulas=32,
+    n_formula_layers=3,
+    n_sequent_layers=3,
+    pad_token_id=vocab_size,
 )
 
-model = FullProofTransformer(config)
+model = StateActionTransformer(config)
 
-state = torch.load("checkpoints/mll_transformer_8000.pt")
+state = torch.load("checkpoints/mll_state_transformer_500.pt")
 model.load_state_dict(state)
 model = model.to(device)
-model.eval()
 
-prompt = "⊢ ⊗(⊗(⅋(a,¬a),c),¬f), ¬f, a, ⊗(¬a,¬j), ⅋(⊗(a,¬a),⊗(⅋(⊗(¬c,j),¬j),⊗(j,¬a))), ⊥, ⊗(f,f), ⊗(a,¬i), ⊗(i,⅋(⊗(h,⊗(𝟙,h)),⅋(⅋(⊗(¬h,⅋(h,¬h)),⅋(⊥,¬h)),⊥)))"
+prompt = "⊢ f; ⊗(¬f,⊗(⊥,⅋(a,¬a))); ⊗(¬i,⅋(h,¬h)); ⊗(⅋(⊗(¬f,𝟙),⊗(⅋(¬f,f),f)),⊗(i,𝟙)) || [1, 2, 0, 0]."
 print("\nPROMPT:")
 print(prompt)
 
 # Encode prompt
-base_tokens = tokenizer.encode(prompt)
-max_length = 250
-temperature = 0.2
 
-num_proof_try = 10
-correct_syntax = 0
-correct_proof = 0
-for k in range(num_proof_try):
-    tokens = base_tokens.copy()
-    with torch.no_grad():
-        while len(tokens) < max_length:
-            x = torch.tensor(
-                [tokens],
-                dtype=torch.long,
-                device=device,
-            )
+formulas, labels = parse_line(prompt)
+formula_tokens = [
+    torch.tensor(
+        tokenizer.encode(formula)[: config.max_formula_len],
+        dtype=torch.long,
+    )
+    for formula in formulas[: config.max_n_formulas]
+]
 
-            logits = model(x)
+print("Tokens input:", formula_tokens)
 
-            next_logits = logits[0, -1] / temperature
-            probs = torch.softmax(next_logits, dim=-1)
+# Build [B=1, N, L] input tensor
+N = len(formula_tokens)
+L = max(len(t) for t in formula_tokens)
 
-            # next_token = torch.argmax(probs).item()
-            # sample
-            next_token = torch.multinomial(probs, num_samples=1).item()
-            tokens.append(next_token)
+x = torch.full(
+    (1, N, L),
+    config.pad_token_id,
+    dtype=torch.long,
+)
 
-            decoded = tokenizer.decode(tokens)
+for i, tokens in enumerate(formula_tokens):
+    x[0, i, :len(tokens)] = tokens
 
-            if "." in decoded:
-                break
+x = x.to(device)
 
-    generated = tokenizer.decode(tokens)
-    print(generated)
-    if check_syntax(generated):
-        correct_syntax += 1
-    if check_proof(generated):
-        correct_proof += 1
+model.eval()
 
-print("Correct syntax: ", correct_syntax, " / ", num_proof_try)
-print("Correct proof: ", correct_proof, " / ", num_proof_try)
+with torch.no_grad():
+    split_logits, side_logits = model(x)
+
+    # Probabilities only for display
+    split_probs = torch.softmax(split_logits, dim=-1)[0]      # [N]
+    side_probs = torch.softmax(side_logits, dim=-1)[0]        # [N, 2]
+
+    predicted_split = split_probs.argmax().item()
+
+print("\nRESULT:")
+
+for i, formula in enumerate(formulas):
+    right_prob = side_probs[i, 0].item()
+    left_prob = side_probs[i, 1].item()
+
+    print(
+        f"{i}: {formula}"
+        f" | split={split_probs[i].item():.3f}"
+        f" | RIGHT={right_prob:.3f}"
+        f" | LEFT={left_prob:.3f}"
+        f" | target={labels[i]}"
+    )
+
+print("\nPredicted split index:", predicted_split)
+print("Predicted split formula:", formulas[predicted_split])
+
+predicted_labels = []
+
+for i in range(N):
+    if i == predicted_split:
+        predicted_labels.append(2)
+    else:
+        predicted_labels.append(side_probs[i].argmax().item())
+
+print("Predicted:", predicted_labels)
+print("Target:   ", labels)
+
+
+
