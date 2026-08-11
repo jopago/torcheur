@@ -2,7 +2,6 @@ import torch
 
 from build_proof import ProofFromSplitterBuilder
 from mll.parse import Parser, parse_normalized_line
-from mll.proofs import proof_str
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
 from tokenizer import FormulaTokenizer
@@ -155,6 +154,6 @@ sequent = parser.parse_sequent()
 proof = builder.build_proof(sequent)
 
 print("PROOF")
-from mll.check import is_valid
+from mll.check import check_proof
 
-print(is_valid(sequent, proof))
+print(check_proof(proof) and proof.sequent == sequent)
