@@ -8,7 +8,7 @@ Sequent = tuple[Formula, ...]
 
 
 def sstr(seq: Sequent) -> str:
-    return "⊢ " + ", ".join(fstr(x) for x in seq)
+    return "⊢ " + "; ".join(fstr(x) for x in seq)
 
 
 @dataclass(frozen=True)
