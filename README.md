@@ -12,6 +12,7 @@ models implemented in *PyTorch*.
 - [x] compact serialization of MLL proofs
 - [x] transformer-based architecture for autoregressive proof generation
 - [ ] unit test for proof generators and serialization
-- [ ] generate *proof state, next action)* dataset
-- [ ] learn (state, action) proof
-- [ ] integrate the next-step predictor into a proof search algorithm and evaluate it 
+- [ ] latexify a proof tree for visualization
+- [x] generate *proof state, next action)* dataset
+- [ ] learn (state, action) proof (IN PROGRESS)
+- [ ] integrate the next-step predictor into a proof search algorithm and evaluate it (IN PROGRESS)
