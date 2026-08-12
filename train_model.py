@@ -1,5 +1,3 @@
-import ast
-
 import torch
 
 from mll.parse import parse_normalized_line

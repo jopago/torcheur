@@ -4,11 +4,12 @@ from build_proof import ProofFromSplitterBuilder
 from mll.parse import Parser
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
+from tensor_splitter import tensor_splitter_from_transformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
-print(lines[289_125])
+
 
 SEED = 42
 # torch.manual_seed(SEED)
@@ -28,77 +29,44 @@ config = StateActionConfig(
     n_sequent_layers=3,
     pad_token_id=vocab_size,
 )
-from mll import proofs as P
-
-
-def transformer_tensor_splitter(
-    transformer: StateActionTransformer, sequent: P.Sequent
-) -> tuple[int, tuple[int, ...]]:
-    formula_tokens = [
-        torch.tensor(
-            tokenizer.encode(P.fstr(formula))[: config.max_formula_len],
-            dtype=torch.long,
-        )
-        for formula in sequent
-    ]
-
-    N = len(formula_tokens)
-    L = max(len(t) for t in formula_tokens)
-
-    x = torch.full(
-        (1, N, L),
-        config.pad_token_id,
-        dtype=torch.long,
-        device=device,
-    )
-
-    for i, tokens in enumerate(formula_tokens):
-        x[0, i, : len(tokens)] = tokens.to(device)
-
-    with torch.no_grad():
-        split_logits, side_logits = transformer(x)
-
-    # Which tensor to split
-    principal_index = split_logits[0].argmax().item()
-
-    # Formulas assigned to LEFT
-    side_pred = side_logits[0].argmax(dim=-1)
-
-    left_positions = tuple(
-        i for i in range(N) if i != principal_index and side_pred[i].item() == 1
-    )
-
-    return principal_index, left_positions
 
 
 model = StateActionTransformer(config)
+tensor_splitter = tensor_splitter_from_transformer(model, tokenizer, config)
 
 state = torch.load("checkpoints/mll_state_transformer_500.pt")
 model.load_state_dict(state)
 model = model.to(device)
+proof_builder = ProofFromSplitterBuilder(tensor_splitter)
 
-prompt = "⊢ 𝟙; ⊗(⊥,𝟙); ⊗(⊥,¬j); j || [1, 2, 0, 0]."
-print("\nPROMPT:")
-print(prompt)
+test_lines = lines[220_000:221_000]
+count_valid = 0
+total = 0
+for line in test_lines:
+    statement = line.split("||")[0]
+    parser = Parser(statement)
+    sequent = parser.parse_sequent()
+
+    if len(sequent) == 1:
+        continue
+
+    total += 1
+
+    predicted_split, left_positions = tensor_splitter(sequent)
+
+    # print("\nPredicted split index:", predicted_split)
+    # print("Predicted left positions:", left_positions)
+    # print("Target:", prompt.split("||")[1])
+
+    from mll.check import check_proof
+
+    try:
+        proof = proof_builder.build_proof(sequent)
+        if check_proof(proof) and proof.sequent == sequent:
+            # print("proof valid")
+            count_valid += 1
+    except:
+        pass
 
 
-statement = prompt.split("||")[0]
-parser = Parser(statement)
-sequent = parser.parse_sequent()
-
-predicted_split, left_positions = transformer_tensor_splitter(model, sequent)
-
-print("\nPredicted split index:", predicted_split)
-print("Predicted left positions:", left_positions)
-print("Target:", prompt.split("||")[1])
-
-builder = ProofFromSplitterBuilder(lambda seq: transformer_tensor_splitter(model, seq))
-
-from mll.check import check_proof
-
-try:
-    proof = builder.build_proof(sequent)
-    if check_proof(proof) and proof.sequent == sequent:
-        print("proof valid")
-except:
-    print("proof invalid")
+print(f"Valid Proofs= {count_valid} / {total} - ({int(100 * count_valid / total)}%) ")

@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from mll import proofs as P
 from mll.formulas import Atom, Bottom, One, Par, Tensor, dual
-
-TensorSplitter = Callable[[P.Sequent], tuple[int, tuple[int, ...]]]
+from tensor_splitter import TensorSplitter
 
 
 class ProofFromSplitterBuilder:
