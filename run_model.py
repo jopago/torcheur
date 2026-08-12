@@ -4,7 +4,7 @@ from build_proof import ProofFromSplitterBuilder
 from mll.parse import Parser
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
-from tensor_splitter import tensor_splitter_from_transformer
+from tensor_splitter import tensor_splitter_from_transformer, random_tensor_split
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
@@ -31,6 +31,8 @@ config = StateActionConfig(
 )
 
 
+
+
 model = StateActionTransformer(config)
 tensor_splitter = tensor_splitter_from_transformer(model, tokenizer, config)
 
@@ -39,7 +41,7 @@ model.load_state_dict(state)
 model = model.to(device)
 proof_builder = ProofFromSplitterBuilder(tensor_splitter)
 
-test_lines = lines[220_000:221_000]
+test_lines = lines[220_000:222_000]
 count_valid = 0
 total = 0
 for line in test_lines:
@@ -52,8 +54,7 @@ for line in test_lines:
 
     total += 1
 
-    predicted_split, left_positions = tensor_splitter(sequent)
-
+    #predicted_split, left_positions = tensor_splitter(sequent)
     # print("\nPredicted split index:", predicted_split)
     # print("Predicted left positions:", left_positions)
     # print("Target:", prompt.split("||")[1])

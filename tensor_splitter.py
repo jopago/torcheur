@@ -9,6 +9,18 @@ from tokenizer import FormulaTokenizer
 
 TensorSplitter = Callable[[P.Sequent], tuple[int, tuple[int, ...]]]
 
+import numpy as np
+
+
+def random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
+    n_formulas = len(sequent)
+
+    split_index = np.random.randint(n_formulas)
+
+    others = [i for i in range(n_formulas) if i != split_index]
+    left = tuple(i for i in others if np.random.randint(2))
+
+    return split_index, left
 
 def tensor_splitter_from_transformer(
     transformer: StateActionTransformer,
