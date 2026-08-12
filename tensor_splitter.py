@@ -12,7 +12,10 @@ TensorSplitter = Callable[[P.Sequent], tuple[int, tuple[int, ...]]]
 import numpy as np
 
 
-def random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
+def random_tensor_splitter() -> TensorSplitter:
+    return lambda seq: _random_tensor_split(seq)
+
+def _random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
     n_formulas = len(sequent)
 
     split_index = np.random.randint(n_formulas)
@@ -21,6 +24,7 @@ def random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
     left = tuple(i for i in others if np.random.randint(2))
 
     return split_index, left
+
 
 def tensor_splitter_from_transformer(
     transformer: StateActionTransformer,
@@ -37,12 +41,13 @@ def _split_sequent_tensors_transformer(
     tokenizer: FormulaTokenizer,
     config: StateActionConfig,
     sequent: P.Sequent,
-    device: str = "cpu",
 ) -> tuple[int, tuple[int, ...]]:
     """
     Use a StateActionTransformer to split tensors in a given sequent.
     :return: the index of the formula to split and the list of indices of formulas that go to the left
     """
+    device = next(transformer.parameters()).device
+
     formula_tokens = [
         torch.tensor(
             tokenizer.encode(P.fstr(formula))[: config.max_formula_len],
