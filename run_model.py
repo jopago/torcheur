@@ -5,7 +5,7 @@ from mll.parse import Parser
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
 from tensor_splitter import (
-    random_tensor_splitter,
+    random_tensor_split,
     tensor_splitter_from_transformer,
 )
 from tokenizer import FormulaTokenizer
@@ -36,13 +36,11 @@ config = StateActionConfig(
 
 model = StateActionTransformer(config)
 tensor_splitter = tensor_splitter_from_transformer(model, tokenizer, config)
-random_splitter = random_tensor_splitter()
-
 state = torch.load("checkpoints/mll_state_transformer_500.pt")
 model.load_state_dict(state)
 model = model.to(device)
 proof_builder = ProofFromSplitterBuilder(tensor_splitter)
-random_proof_builder = ProofFromSplitterBuilder(random_splitter)
+random_proof_builder = ProofFromSplitterBuilder(random_tensor_split)
 
 test_lines = lines[220_000:222_000]
 count_valid = 0

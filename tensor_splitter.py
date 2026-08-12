@@ -13,12 +13,7 @@ import numpy as np
 
 from mll.formulas import Tensor
 
-
-def random_tensor_splitter() -> TensorSplitter:
-    return lambda seq: _random_tensor_split(seq)
-
-
-def _random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
+def random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
     n_formulas = len(sequent)
 
     tensor_idx = [i for i in range(n_formulas) if isinstance(sequent[i], Tensor)]
