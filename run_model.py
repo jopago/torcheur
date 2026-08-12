@@ -1,14 +1,14 @@
 import torch
 
 from build_proof import ProofFromSplitterBuilder
-from mll.parse import Parser, parse_normalized_line
+from mll.parse import Parser
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
 from tokenizer import FormulaTokenizer
 
 with open("mll_positional.txt", "r", encoding="utf-8") as f:
     lines = [line.strip() for line in f if line.strip()]
-print(lines[289_519])
+print(lines[289_125])
 
 SEED = 42
 # torch.manual_seed(SEED)
@@ -31,7 +31,9 @@ config = StateActionConfig(
 from mll import proofs as P
 
 
-def transformer_tensor_splitter(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
+def transformer_tensor_splitter(
+    transformer: StateActionTransformer, sequent: P.Sequent
+) -> tuple[int, tuple[int, ...]]:
     formula_tokens = [
         torch.tensor(
             tokenizer.encode(P.fstr(formula))[: config.max_formula_len],
@@ -54,7 +56,7 @@ def transformer_tensor_splitter(sequent: P.Sequent) -> tuple[int, tuple[int, ...
         x[0, i, : len(tokens)] = tokens.to(device)
 
     with torch.no_grad():
-        split_logits, side_logits = model(x)
+        split_logits, side_logits = transformer(x)
 
     # Which tensor to split
     principal_index = split_logits[0].argmax().item()
@@ -75,69 +77,28 @@ state = torch.load("checkpoints/mll_state_transformer_500.pt")
 model.load_state_dict(state)
 model = model.to(device)
 
-prompt = "⊢ ⊗(⅋(¬a,a),⊗(¬b,⅋(f,¬f))); ⊗(⅋(⊥,𝟙),b); ⊗(⊥,⊗(⊗(⅋(¬e,e),𝟙),𝟙)) || [0, 2, 1]."
+prompt = "⊢ 𝟙; ⊗(⊥,𝟙); ⊗(⊥,¬j); j || [1, 2, 0, 0]."
 print("\nPROMPT:")
 print(prompt)
 
-# Encode prompt
 
-formulas, labels = parse_normalized_line(prompt)
-formula_tokens = [
-    torch.tensor(
-        tokenizer.encode(formula)[: config.max_formula_len],
-        dtype=torch.long,
-    )
-    for formula in formulas[: config.max_n_formulas]
-]
-
-# Build [B=1, N, L] input tensor
-N = len(formula_tokens)
-L = max(len(t) for t in formula_tokens)
-
-x = torch.full(
-    (1, N, L),
-    config.pad_token_id,
-    dtype=torch.long,
-)
-
-for i, tokens in enumerate(formula_tokens):
-    x[0, i, : len(tokens)] = tokens
-
-x = x.to(device)
-
-model.eval()
-
-with torch.no_grad():
-    split_logits, side_logits = model(x)
-
-    # Probabilities only for display
-    split_probs = torch.softmax(split_logits, dim=-1)[0]  # [N]
-    side_probs = torch.softmax(side_logits, dim=-1)[0]  # [N, 2]
-
-    predicted_split = split_probs.argmax().item()
-
-
-print("\nPredicted split index:", predicted_split)
-print("Predicted split formula:", formulas[predicted_split])
-
-predicted_labels = []
-
-for i in range(N):
-    if i == predicted_split:
-        predicted_labels.append(2)
-    else:
-        predicted_labels.append(side_probs[i].argmax().item())
-
-print("Predicted:", predicted_labels)
-print("Target:   ", labels)
-
-
-builder = ProofFromSplitterBuilder(transformer_tensor_splitter)
 statement = prompt.split("||")[0]
 parser = Parser(statement)
 sequent = parser.parse_sequent()
-proof = builder.build_proof(sequent)
+
+predicted_split, left_positions = transformer_tensor_splitter(model, sequent)
+
+print("\nPredicted split index:", predicted_split)
+print("Predicted left positions:", left_positions)
+print("Target:", prompt.split("||")[1])
+
+builder = ProofFromSplitterBuilder(lambda seq: transformer_tensor_splitter(model, seq))
 
 from mll.check import check_proof
 
-print("Proof valid", check_proof(proof) and proof.sequent == sequent)
+try:
+    proof = builder.build_proof(sequent)
+    if check_proof(proof) and proof.sequent == sequent:
+        print("proof valid")
+except:
+    print("proof invalid")
