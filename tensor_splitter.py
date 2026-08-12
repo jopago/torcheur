@@ -11,14 +11,18 @@ TensorSplitter = Callable[[P.Sequent], tuple[int, tuple[int, ...]]]
 
 import numpy as np
 
+from mll.formulas import Tensor
+
 
 def random_tensor_splitter() -> TensorSplitter:
     return lambda seq: _random_tensor_split(seq)
 
+
 def _random_tensor_split(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
     n_formulas = len(sequent)
 
-    split_index = np.random.randint(n_formulas)
+    tensor_idx = [i for i in range(n_formulas) if isinstance(sequent[i], Tensor)]
+    split_index = np.random.choice(tensor_idx)
 
     others = [i for i in range(n_formulas) if i != split_index]
     left = tuple(i for i in others if np.random.randint(2))
