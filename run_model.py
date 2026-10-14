@@ -1,14 +1,13 @@
-import random
-
 import torch
 
 from build_proof import ProofFromSplitterBuilder
-from mll import proofs as P
 from mll.check import check_proof
-from mll.formulas import Tensor
-from mll.parse import Parser
+from mll.parse import ParseError, Parser
 from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
+from tensor_splitter import (
+    tensor_splitter_from_transformer,
+)
 from tokenizer import FormulaTokenizer
 
 # Use "val" while comparing archis / hyperparams.
@@ -53,58 +52,9 @@ config = StateActionConfig(
     pad_token_id=vocab_size,
 )
 
-
-def transformer_tensor_splitter(sequent: P.Sequent) -> tuple[int, tuple[int, ...]]:
-    if not sequent:
-        return -1, ()
-
-    formula_tokens = [
-        torch.tensor(
-            tokenizer.encode(P.fstr(formula))[: config.max_formula_len],
-            dtype=torch.long,
-        )
-        for formula in sequent
-    ]
-
-    N = len(formula_tokens)
-    L = max((len(t) for t in formula_tokens), default=0)
-    if L == 0:
-        return -1, ()
-
-    x = torch.full(
-        (1, N, L),
-        config.pad_token_id,
-        dtype=torch.long,
-        device=device,
-    )
-
-    for i, tokens in enumerate(formula_tokens):
-        x[0, i, : len(tokens)] = tokens.to(device)
-
-    with torch.no_grad():
-        split_logits, side_logits = model(x)
-
-    principal_index = split_logits[0].argmax().item()
-
-    # If the model did not pick a ⊗, fall back to a random tensor in the sequent.
-    if not isinstance(sequent[principal_index], Tensor):
-        tensor_indices = [
-            i for i, formula in enumerate(sequent) if isinstance(formula, Tensor)
-        ]
-        if not tensor_indices:
-            return -1, ()
-        principal_index = random.choice(tensor_indices)
-
-    side_pred = side_logits[0].argmax(dim=-1)
-    left_positions = tuple(
-        i for i in range(N) if i != principal_index and side_pred[i].item() == 1
-    )
-
-    return principal_index, left_positions
-
-
 model = StateActionTransformer(config)
-
+tensor_splitter = tensor_splitter_from_transformer(model, tokenizer, config)
+builder = ProofFromSplitterBuilder(tensor_splitter)
 state = torch.load("checkpoints/mll_state_transformer_500.pt")
 model.load_state_dict(state)
 model = model.to(device)
@@ -166,8 +116,6 @@ model.eval()
 # proof = builder.build_proof(sequent)
 # print("Proof valid", check_proof(proof) and proof.sequent == sequent)
 
-builder = ProofFromSplitterBuilder(transformer_tensor_splitter)
-
 eval_lines = eval_lines_raw if MAX_EVAL is None else eval_lines_raw[:MAX_EVAL]
 n_total = len(eval_lines)
 n_valid = 0
@@ -181,7 +129,7 @@ for i, line in enumerate(eval_lines):
         proof = builder.build_proof(sequent)
         if check_proof(proof) and proof is not None and proof.sequent == sequent:
             n_valid += 1
-    except Exception as e:
+    except (ParseError, ValueError, TypeError, IndexError) as e:
         print(f"  [{i + 1}] failed: {type(e).__name__}: {e}")
 
     if (i + 1) % 100 == 0 or (i + 1) == n_total:

@@ -1,0 +1,12 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "python": "/home/esaie/Documents/torcheur/.venv/bin/python",
+      "pythonVersion": "3.12"
+    }
+  ]
+}

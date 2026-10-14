@@ -4,7 +4,7 @@ from build_proof import ProofFromSplitterBuilder
 from mll import proofs as P
 from mll.check import check_proof
 from mll.formulas import Tensor
-from mll.parse import Parser
+from mll.parse import ParseError, Parser
 
 # Use "val" while comparing archis / hyperparams.
 # Switch to "test" once at the end for the holdout score (do not tune on it).
@@ -70,7 +70,7 @@ for i, line in enumerate(eval_lines):
         proof = builder.build_proof(sequent)
         if check_proof(proof) and proof is not None and proof.sequent == sequent:
             n_valid += 1
-    except Exception as e:
+    except (ParseError, ValueError, TypeError, IndexError) as e:
         print(f"  [{i + 1}] failed: {type(e).__name__}: {e}")
 
     if (i + 1) % 100 == 0 or (i + 1) == n_total:
