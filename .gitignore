@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 .venv/
 mll_positional.txt
+mll_positional_*.txt
+tokenizer_mll_state_action.json
 .idea/
 checkpoints/
 *.pt

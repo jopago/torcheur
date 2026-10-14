@@ -12,7 +12,7 @@ class ProofFromSplitterBuilder:
     def __init__(self, splitter: TensorSplitter):
         self.splitter = splitter
 
-    def build_proof(self, sequent: P.Sequent) -> P.Proof:
+    def build_proof(self, sequent: P.Sequent) -> P.Proof | None:
         if not sequent:
             raise ValueError("empty sequent")
 
@@ -22,7 +22,7 @@ class ProofFromSplitterBuilder:
         self,
         sequent: P.Sequent,
         position: int,
-    ) -> P.Proof:
+    ) -> P.Proof | None:
 
         if position == len(sequent):
             if sequent == (One(),):
@@ -41,21 +41,17 @@ class ProofFromSplitterBuilder:
                 + (formula.left, formula.right)
                 + sequent[position + 1 :]
             )
-
-            return P.ParRule(
-                sequent,
-                position,
-                self._negative_phase(child_sequent, position),
-            )
+            child = self._negative_phase(child_sequent, position)
+            if child is None:
+                return None
+            return P.ParRule(sequent, position, child)
 
         if isinstance(formula, Bottom):
             child_sequent = sequent[:position] + sequent[position + 1 :]
-
-            return P.BotRule(
-                sequent,
-                position,
-                self._negative_phase(child_sequent, position),
-            )
+            child = self._negative_phase(child_sequent, position)
+            if child is None:
+                return None
+            return P.BotRule(sequent, position, child)
 
         return self._negative_phase(sequent, position + 1)
 
@@ -64,7 +60,7 @@ class ProofFromSplitterBuilder:
         sequent: P.Sequent,
         position: int,
         end_position: int,
-    ) -> P.Proof:
+    ) -> P.Proof | None:
 
         if position == end_position:
             if sequent == (One(),):
@@ -83,29 +79,25 @@ class ProofFromSplitterBuilder:
                 + (formula.left, formula.right)
                 + sequent[position + 1 :]
             )
-
-            return P.ParRule(
-                sequent,
+            child = self._negative_block_phase(
+                child_sequent,
                 position,
-                self._negative_block_phase(
-                    child_sequent,
-                    position,
-                    end_position + 1,
-                ),
+                end_position + 1,
             )
+            if child is None:
+                return None
+            return P.ParRule(sequent, position, child)
 
         if isinstance(formula, Bottom):
             child_sequent = sequent[:position] + sequent[position + 1 :]
-
-            return P.BotRule(
-                sequent,
+            child = self._negative_block_phase(
+                child_sequent,
                 position,
-                self._negative_block_phase(
-                    child_sequent,
-                    position,
-                    end_position - 1,
-                ),
+                end_position - 1,
             )
+            if child is None:
+                return None
+            return P.BotRule(sequent, position, child)
 
         return self._negative_block_phase(
             sequent,
@@ -113,11 +105,13 @@ class ProofFromSplitterBuilder:
             end_position,
         )
 
-    def _positive_phase(self, sequent: P.Sequent) -> P.Proof:
+    def _positive_phase(self, sequent: P.Sequent) -> P.Proof | None:
+        if not sequent:
+            return None
 
         if len(sequent) == 2 and all(isinstance(f, Atom) for f in sequent):
             if sequent[0] != dual(sequent[1]):
-                raise ValueError("invalid atomic axiom")
+                return None
             return P.Ax(sequent)
 
         if sequent == (One(),):
@@ -126,26 +120,29 @@ class ProofFromSplitterBuilder:
         principal_index, left_positions = self.splitter(sequent)
 
         if not (0 <= principal_index < len(sequent)):
-            raise IndexError("principal_index out of range")
+            return None
 
         tensor = sequent[principal_index]
 
         if not isinstance(tensor, Tensor):
-            raise TypeError("principal formula is not a tensor")
+            return None
 
         left_positions = tuple(left_positions)
 
         if left_positions != tuple(sorted(left_positions)):
-            raise ValueError("left_positions must be sorted")
+            return None
 
         if principal_index in left_positions:
-            raise ValueError("principal index belongs to no branch")
+            return None
 
-        left_sequent, right_sequent = P.tensor_premises(
-            sequent,
-            principal_index,
-            left_positions,
-        )
+        try:
+            left_sequent, right_sequent = P.tensor_premises(
+                sequent,
+                principal_index,
+                left_positions,
+            )
+        except (ValueError, TypeError, IndexError):
+            return None
 
         left_cursor = sum(1 for i in range(principal_index) if i in left_positions)
         right_cursor = principal_index - left_cursor
@@ -167,6 +164,9 @@ class ProofFromSplitterBuilder:
             )
         else:
             right_proof = self._positive_phase(right_sequent)
+
+        if left_proof is None or right_proof is None:
+            return None
 
         return P.TensorRule(
             sequent,

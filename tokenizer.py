@@ -42,7 +42,7 @@ class FormulaTokenizer:
                 # One training example per line, skip multi-lines
                 if "\n" in a or "\n" in b:
                     continue
-                if (a, b) in pair_counts.keys():
+                if (a, b) in pair_counts:
                     pair_counts[(a, b)] += 1
                 else:
                     pair_counts[(a, b)] = 1

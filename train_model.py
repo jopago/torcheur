@@ -1,4 +1,4 @@
-import ast
+from pathlib import Path
 
 import torch
 
@@ -7,15 +7,32 @@ from models.configs import StateActionConfig
 from models.mll_transformers import StateActionTransformer
 from tokenizer import FormulaTokenizer
 
-with open("mll_positional.txt", "r", encoding="utf-8") as f:
-    lines = [line.strip() for line in f if line.strip()]
+# Caps in number of dataset LINES (not proofs) to keep encoding in RAM.
+TRAIN_N = 800_000
+VAL_N = 200_000
 
 
-test_lines = lines[200_000:300_000]
-lines = lines[:200_000]
+def read_n_lines(path: str, n: int) -> list[str]:
+    lines: list[str] = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            lines.append(line)
+            if len(lines) >= n:
+                break
+    return lines
+
+
+lines = read_n_lines("mll_positional_train.txt", TRAIN_N)
+val_lines = read_n_lines("mll_positional_val.txt", VAL_N)
+print(f"Using {len(lines)} train lines, {len(val_lines)} val lines")
 
 # Train the tokenizer on 10k formulas
-tokenizer_training_text = ["".join(parse_normalized_line(line)[0]) for line in lines[:10_000]]
+tokenizer_training_text = [
+    "".join(parse_normalized_line(line)[0]) for line in lines[:10_000]
+]
 
 # Train tokenizer
 tokenizer = FormulaTokenizer()
@@ -55,8 +72,6 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
 
 batch_size = 64
 
-print("Encoding training and test set...")
-
 
 def encode_formula_labels(dataset: list[str], config: StateActionConfig):
     encoded = []
@@ -80,14 +95,19 @@ def encode_formula_labels(dataset: list[str], config: StateActionConfig):
     return encoded
 
 
-# encoded_train = encode_formula_labels(lines, config)
-# encoded_test = encode_formula_labels(test_lines, config)
+train_path = Path(f"encoded_train_{TRAIN_N}.pt")
+val_path = Path(f"encoded_val_{VAL_N}.pt")
+if train_path.exists() and val_path.exists() and train_path.stat().st_size > 0:
+    print("Loading encoded sets from disk...")
+    encoded_train = torch.load(train_path)
+    encoded_val = torch.load(val_path)
+else:
+    print("Encoding training and val set...")
+    encoded_train = encode_formula_labels(lines, config)
+    encoded_val = encode_formula_labels(val_lines, config)
+    torch.save(encoded_train, train_path)
+    torch.save(encoded_val, val_path)
 
-# torch.save(encoded_train, "encoded_training_set.pt")
-# torch.save(encoded_test, "encoded_test_set.pt")
-
-encoded_train = torch.load("encoded_training_set.pt")
-encoded_test = torch.load("encoded_test_set.pt")
 
 print("training...")
 
@@ -146,8 +166,8 @@ def make_xy(batch):
 eval_size = 4096
 eval_batch_size = 128
 
-eval_indices = torch.randperm(len(encoded_test))[:eval_size]
-fixed_eval = [encoded_test[i] for i in eval_indices]
+eval_indices = torch.randperm(len(encoded_val))[:eval_size]
+fixed_eval = [encoded_val[i] for i in eval_indices]
 
 
 @torch.no_grad()
@@ -186,7 +206,7 @@ def evaluate():
     )
 
 
-for step in range(20_000):
+for step in range(501):
     indices = torch.randint(len(encoded_train), (batch_size,))
     batch = [encoded_train[i] for i in indices]
 
@@ -226,4 +246,5 @@ for step in range(20_000):
             eval_side_acc,
         )
     if step % 500 == 0:
+        Path("checkpoints").mkdir(exist_ok=True)
         torch.save(model.state_dict(), f"checkpoints/mll_state_transformer_{step}.pt")

@@ -11,8 +11,17 @@ from mll.generate import generate_normalized_dataset
 def main() -> None:
     ap = argparse.ArgumentParser()
 
-    ap.add_argument("--n", type=int, default=300000)
-    ap.add_argument("--out", type=Path, default=Path("mll_positional.txt"))
+    # Default sized for encoding into RAM (each proof → several state-action lines).
+    # Bump later if val still climbs with more data.
+    ap.add_argument("--train-n", type=int, default=300_000)
+    ap.add_argument("--val-n", type=int, default=100_000)
+    ap.add_argument("--test-n", type=int, default=100_000)
+    ap.add_argument(
+        "--out-dir",
+        type=Path,
+        default=Path("."),
+        help="writes mll_positional_{train,val,test}.txt here",
+    )
     ap.add_argument("--seed", type=int, default=0)
 
     ap.add_argument("--min-leaves", type=int, default=2)
@@ -75,24 +84,34 @@ def main() -> None:
     ap.add_argument("--single-formula", action="store_true")
 
     args = ap.parse_args()
+    args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    generate_normalized_dataset(
-        out=args.out,
-        n=args.n,
-        seed=args.seed,
-        min_leaves=args.min_leaves,
-        max_leaves=args.max_leaves,
-        n_atoms=args.n_atoms,
-        one_prob=args.one_prob,
-        ax_prob=args.ax_prob,
-        ax_pos_prob=args.ax_pos_prob,
-        tensor_prob=args.tensor_prob,
-        par_prob=args.par_prob,
-        stop_prob=args.stop_prob,
-        single_formula=args.single_formula,
+    splits = (
+        ("train", args.train_n, args.seed),
+        ("val", args.val_n, args.seed + 1),
+        ("test", args.test_n, args.seed + 2),
     )
 
-    print(f"{args.n} proofs written to {args.out}")
+    for name, n, seed in splits:
+        if n <= 0:
+            continue
+        out = args.out_dir / f"mll_positional_{name}.txt"
+        generate_normalized_dataset(
+            out=out,
+            n=n,
+            seed=seed,
+            min_leaves=args.min_leaves,
+            max_leaves=args.max_leaves,
+            n_atoms=args.n_atoms,
+            one_prob=args.one_prob,
+            ax_prob=args.ax_prob,
+            ax_pos_prob=args.ax_pos_prob,
+            tensor_prob=args.tensor_prob,
+            par_prob=args.par_prob,
+            stop_prob=args.stop_prob,
+            single_formula=args.single_formula,
+        )
+        print(f"{n} proofs written to {out}")
 
 
 if __name__ == "__main__":

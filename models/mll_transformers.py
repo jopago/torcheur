@@ -178,3 +178,144 @@ class StateActionTransformer(nn.Module):
         side_logits = self.side_head(x)
 
         return split_logits, side_logits
+
+
+class _FormulaEncoder(nn.Module):
+    """Shared formula-level encoder (token embed → formula transformer → pool)."""
+
+    def __init__(self, cfg: StateActionConfig):
+        super().__init__()
+        self.cfg = cfg
+
+        self.token_embedding = nn.Embedding(
+            cfg.vocab_size,
+            cfg.embedding_dim,
+            padding_idx=cfg.pad_token_id,
+        )
+        self.token_position_embedding = nn.Embedding(
+            cfg.max_formula_len,
+            cfg.embedding_dim,
+        )
+
+        formula_layer = nn.TransformerEncoderLayer(
+            d_model=cfg.embedding_dim,
+            nhead=cfg.n_heads,
+            dim_feedforward=cfg.ff_dim,
+            dropout=0.0,
+            batch_first=True,
+            norm_first=True,
+            activation="gelu",
+        )
+        self.formula_transformer = nn.TransformerEncoder(
+            formula_layer,
+            num_layers=cfg.n_formula_layers,
+        )
+
+    def forward(self, tokens):
+        # tokens: [B, N, L]
+        B, N, L = tokens.shape
+
+        token_mask = tokens == self.cfg.pad_token_id
+        formula_mask = token_mask.all(dim=-1)  # [B, N]
+
+        x = self.token_embedding(tokens)
+        positions = torch.arange(L, device=tokens.device)
+        x = x + self.token_position_embedding(positions)[None, None, :, :]
+
+        x = x.reshape(B * N, L, -1)
+        flat_mask = token_mask.reshape(B * N, L)
+
+        attention_mask = flat_mask.clone()
+        fully_padded = attention_mask.all(dim=1)
+        attention_mask[fully_padded, 0] = False
+
+        x = self.formula_transformer(x, src_key_padding_mask=attention_mask)
+
+        valid = (~flat_mask).unsqueeze(-1)
+        formula_embeddings = (x * valid).sum(dim=1) / valid.sum(dim=1).clamp(min=1)
+        formula_embeddings[fully_padded] = 0.0
+        formula_embeddings = formula_embeddings.reshape(B, N, -1)
+
+        return formula_embeddings, formula_mask
+
+
+class SplitTransformer(nn.Module):
+    """Predict which formula to split. No sequent position embeddings."""
+
+    def __init__(self, cfg: StateActionConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.formula_encoder = _FormulaEncoder(cfg)
+
+        sequent_layer = nn.TransformerEncoderLayer(
+            d_model=cfg.embedding_dim,
+            nhead=cfg.n_heads,
+            dim_feedforward=cfg.ff_dim,
+            dropout=0.0,
+            batch_first=True,
+            norm_first=True,
+            activation="gelu",
+        )
+        self.sequent_transformer = nn.TransformerEncoder(
+            sequent_layer,
+            num_layers=cfg.n_sequent_layers,
+        )
+        self.norm = nn.LayerNorm(cfg.embedding_dim)
+        self.split_head = nn.Linear(cfg.embedding_dim, 1)
+
+    def forward(self, tokens):
+        formula_embeddings, formula_mask = self.formula_encoder(tokens)
+
+        x = self.sequent_transformer(
+            formula_embeddings,
+            src_key_padding_mask=formula_mask,
+        )
+        x = self.norm(x)
+
+        split_logits = self.split_head(x).squeeze(-1)
+        split_logits = split_logits.masked_fill(formula_mask, -1e6)
+        return split_logits
+
+
+class SideTransformer(nn.Module):
+    """Predict LEFT/RIGHT given which formula is principal (e_yes / e_no flags)."""
+
+    def __init__(self, cfg: StateActionConfig):
+        super().__init__()
+        self.cfg = cfg
+        self.formula_encoder = _FormulaEncoder(cfg)
+
+        # 0 = not principal (e_no), 1 = principal (e_yes)
+        self.principal_flag_embedding = nn.Embedding(2, cfg.embedding_dim)
+
+        sequent_layer = nn.TransformerEncoderLayer(
+            d_model=cfg.embedding_dim,
+            nhead=cfg.n_heads,
+            dim_feedforward=cfg.ff_dim,
+            dropout=0.0,
+            batch_first=True,
+            norm_first=True,
+            activation="gelu",
+        )
+        self.sequent_transformer = nn.TransformerEncoder(
+            sequent_layer,
+            num_layers=cfg.n_sequent_layers,
+        )
+        self.norm = nn.LayerNorm(cfg.embedding_dim)
+        self.side_head = nn.Linear(cfg.embedding_dim, 2)
+
+    def forward(self, tokens, split_index):
+        # tokens: [B, N, L], split_index: [B]
+        formula_embeddings, formula_mask = self.formula_encoder(tokens)
+
+        B, N, _ = formula_embeddings.shape
+        flags = torch.zeros(B, N, dtype=torch.long, device=tokens.device)
+        flags[torch.arange(B, device=tokens.device), split_index] = 1
+
+        x = formula_embeddings + self.principal_flag_embedding(flags)
+
+        x = self.sequent_transformer(x, src_key_padding_mask=formula_mask)
+        x = self.norm(x)
+
+        # [B, N, 2] — principal still visible in the transformer; loss ignores it
+        return self.side_head(x)

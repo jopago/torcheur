@@ -22,7 +22,10 @@ from mll.proofs import (
 )
 
 
-def check_proof(proof: Proof) -> bool:
+def check_proof(proof: Proof | None) -> bool:
+    if proof is None:
+        return False
+
     if isinstance(proof, Ax):
         if len(proof.sequent) != 2:
             return False
